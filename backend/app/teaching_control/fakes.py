@@ -6,7 +6,9 @@ from .errors import StaleStateVersionError
 from .protocols import (
     GuidanceDraft,
     GuidanceRequest,
+    InterventionCreation,
     PersistResult,
+    RequirementEvaluation,
     ToolExecutionRequest,
     ToolExecutionResult,
 )
@@ -101,5 +103,48 @@ class FakeTeachingEventStore:
                 "event": dict(event),
             }
         )
+        self._ledger[operation_id] = result
+        return result
+
+
+@dataclass
+class FakeRequirementEvaluator:
+    """Server-side fake; tests control results without trusting incoming events."""
+
+    stage_satisfied: bool = False
+    result_refs: tuple[str, ...] = ()
+    calls: list[dict[str, str]] = field(default_factory=list)
+
+    def evaluate(self, *, attempt_id: str, task_version: str, stage: str) -> RequirementEvaluation:
+        self.calls.append({"attempt_id": attempt_id, "task_version": task_version, "stage": stage})
+        return RequirementEvaluation(self.stage_satisfied, self.result_refs)
+
+
+@dataclass
+class FakeInterventionStore:
+    """Records durable-business ordering before interrupt in stage-02A tests."""
+
+    calls: list[dict[str, object]] = field(default_factory=list)
+    _ledger: dict[str, InterventionCreation] = field(default_factory=dict)
+
+    def create_intervention(
+        self,
+        *,
+        operation_id: str,
+        attempt_id: str,
+        reason: str,
+        requested_state_version: int,
+        evidence_refs: tuple[str, ...],
+    ) -> InterventionCreation:
+        if operation_id in self._ledger:
+            return replace(self._ledger[operation_id], duplicate=True)
+        result = InterventionCreation(intervention_id=f"intervention:{attempt_id}:{operation_id}")
+        self.calls.append({
+            "operation_id": operation_id,
+            "attempt_id": attempt_id,
+            "reason": reason,
+            "requested_state_version": requested_state_version,
+            "evidence_refs": evidence_refs,
+        })
         self._ledger[operation_id] = result
         return result

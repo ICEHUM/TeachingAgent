@@ -16,7 +16,9 @@ from .errors import (
 )
 from .protocols import (
     GuidanceRequest,
+    InterventionStoreProtocol,
     OpenHandsExecutorProtocol,
+    RequirementEvaluatorProtocol,
     TeachingEventStoreProtocol,
     TeachingLLMProtocol,
     ToolExecutionRequest,
@@ -42,6 +44,8 @@ class TeachingGraphDependencies:
     executor: OpenHandsExecutorProtocol
     llm: TeachingLLMProtocol
     event_store: TeachingEventStoreProtocol
+    requirement_evaluator: RequirementEvaluatorProtocol
+    intervention_store: InterventionStoreProtocol
 
 
 def _bounded_operations(existing: list[str], operation_id: str) -> list[str]:
@@ -148,6 +152,7 @@ def load_policy(state: TeachingState) -> dict[str, object]:
             "max_help_level": "L0",
             "allow_answer_guidance": False,
             "allow_code_patch": False,
+            "allow_auto_l2": False,
         }
     return {"effective_policy": effective}
 
@@ -164,7 +169,6 @@ def collect_evidence(state: TeachingState) -> dict[str, object]:
         "evidence_refs": refs,
         "evidence_summary": summary,
         "student_observation": observation,
-        "stage_requirements_met": bool(event.get("stage_requirements_met", False)),
     }
     if event["event_type"] != "check_result":
         return update
@@ -240,6 +244,31 @@ def decide_action(state: TeachingState) -> dict[str, object]:
             },
             "error_code": "CODE_PATCH_FORBIDDEN",
         }
+    if event["event_type"] == "run_tool" and requested_tool:
+        capability = policy["tool_capabilities"].get(requested_tool)
+        if capability is None or requested_tool not in policy["allowed_tools"]:
+            return {
+                "decision": {
+                    "kind": "reject",
+                    "reason": "Requested tool is not allowed.",
+                    "guidance_kind": None,
+                    "tool_name": requested_tool,
+                },
+                "error_code": "TOOL_FORBIDDEN",
+            }
+        if (
+            state["mode"] == "assessment"
+            and capability not in policy["assessment_allowed_capabilities"]
+        ):
+            return {
+                "decision": {
+                    "kind": "reject",
+                    "reason": f"Tool capability {capability} is forbidden in assessment mode.",
+                    "guidance_kind": None,
+                    "tool_name": requested_tool,
+                },
+                "error_code": "TOOL_CAPABILITY_FORBIDDEN",
+            }
     if state["latest_check_status"] == "infrastructure_failure":
         return {
             "decision": {
@@ -271,11 +300,29 @@ def decide_action(state: TeachingState) -> dict[str, object]:
                 "intervention_id": intervention_id,
                 "reason": "failure_threshold_reached",
                 "requested_state_version": state["state_version"],
+                "persisted": False,
             },
             "flow_status": "WAITING_FOR_TEACHER",
         }
     if state["latest_check_status"] == "student_failure":
         level = _select_help_level(state)
+        if level == "L2" and not (policy["allow_auto_l2"] or state["l2_authorized"]):
+            operation_id = event["operation_id"]
+            return {
+                "decision": {
+                    "kind": "teacher_interrupt",
+                    "reason": "L2 requires explicit task policy or teacher authorization.",
+                    "guidance_kind": None,
+                    "tool_name": None,
+                },
+                "pending_intervention": {
+                    "intervention_id": f"pending:{operation_id}",
+                    "reason": "l2_authorization_required",
+                    "requested_state_version": state["state_version"],
+                    "persisted": False,
+                },
+                "flow_status": "WAITING_FOR_TEACHER",
+            }
         return {
             "help_level": level,
             "decision": {
@@ -302,7 +349,7 @@ def decide_action(state: TeachingState) -> dict[str, object]:
             },
         }
     if event["event_type"] == "run_tool":
-        if not requested_tool or requested_tool not in policy["allowed_tools"]:
+        if not requested_tool:
             return {
                 "decision": {
                     "kind": "reject",
@@ -334,10 +381,32 @@ def route_decision(state: TeachingState) -> str:
     return {
         "execute_tool": "execute_tool",
         "generate_guidance": "generate_guidance",
-        "teacher_interrupt": "teacher_interrupt",
+        "teacher_interrupt": "persist_intervention",
         "persist_only": "persist_event",
         "reject": "persist_event",
     }[state["decision"]["kind"]]
+
+
+def _persist_intervention(
+    state: TeachingState, dependencies: TeachingGraphDependencies
+) -> dict[str, object]:
+    pending = state["pending_intervention"]
+    if pending is None:
+        raise InvalidContextError("Intervention persistence requires a pending intervention.")
+    result = dependencies.intervention_store.create_intervention(
+        operation_id=f"intervention:{state['incoming_event']['operation_id']}",
+        attempt_id=state["attempt_id"],
+        reason=pending["reason"],
+        requested_state_version=state["state_version"],
+        evidence_refs=tuple(state["evidence_refs"]),
+    )
+    return {
+        "pending_intervention": {
+            **pending,
+            "intervention_id": result.intervention_id,
+            "persisted": True,
+        }
+    }
 
 
 def _execute_tool(
@@ -422,6 +491,8 @@ def teacher_interrupt(state: TeachingState) -> dict[str, object]:
     pending = state["pending_intervention"]
     if pending is None:
         raise InvalidContextError("Teacher interrupt requires a pending intervention.")
+    if not pending["persisted"]:
+        raise InvalidContextError("Intervention must be persisted before interrupt.")
     resumed = interrupt(
         {
             "attempt_id": state["attempt_id"],
@@ -451,11 +522,13 @@ def teacher_interrupt(state: TeachingState) -> dict[str, object]:
         "roles": list(roles),
         "expected_state_version": cast(int, expected_version),
         "response": str(resumed.get("response", "")).strip(),
+        "allow_l2": bool(resumed.get("allow_l2", False)),
     }
     return {
         "teacher_resume": teacher_resume,
         "pending_intervention": None,
         "flow_status": "RUNNING",
+        "l2_authorized": bool(resumed.get("allow_l2", False)),
     }
 
 
@@ -524,6 +597,20 @@ def stage_assessment(state: TeachingState) -> dict[str, object]:
             "outcome": outcome,
             "reason": reason,
         }
+    }
+
+
+def _evaluate_requirements(
+    state: TeachingState, dependencies: TeachingGraphDependencies
+) -> dict[str, object]:
+    evaluation = dependencies.requirement_evaluator.evaluate(
+        attempt_id=state["attempt_id"],
+        task_version=state["task_version"],
+        stage=state["current_stage"],
+    )
+    return {
+        "stage_requirements_met": evaluation.stage_satisfied,
+        "requirement_result_refs": list(evaluation.result_refs),
     }
 
 
@@ -615,9 +702,15 @@ def build_teaching_graph(*, dependencies: TeachingGraphDependencies, checkpointe
     )
     builder.add_node("teacher_interrupt", teacher_interrupt)
     builder.add_node(
+        "persist_intervention", lambda state: _persist_intervention(state, dependencies)
+    )
+    builder.add_node(
         "persist_event", lambda state: _persist_event(state, dependencies)
     )
     builder.add_node("stage_assessment", stage_assessment)
+    builder.add_node(
+        "evaluate_requirements", lambda state: _evaluate_requirements(state, dependencies)
+    )
     builder.add_node("wait", wait_state)
     builder.add_node(
         "advance_stage", lambda state: _advance_stage(state, dependencies)
@@ -637,14 +730,16 @@ def build_teaching_graph(*, dependencies: TeachingGraphDependencies, checkpointe
         {
             "execute_tool": "execute_tool",
             "generate_guidance": "generate_guidance",
-            "teacher_interrupt": "teacher_interrupt",
+            "persist_intervention": "persist_intervention",
             "persist_event": "persist_event",
         },
     )
     builder.add_edge("execute_tool", "persist_event")
     builder.add_edge("generate_guidance", "persist_event")
+    builder.add_edge("persist_intervention", "teacher_interrupt")
     builder.add_edge("teacher_interrupt", "persist_event")
-    builder.add_edge("persist_event", "stage_assessment")
+    builder.add_edge("persist_event", "evaluate_requirements")
+    builder.add_edge("evaluate_requirements", "stage_assessment")
     builder.add_conditional_edges(
         "stage_assessment",
         route_assessment,

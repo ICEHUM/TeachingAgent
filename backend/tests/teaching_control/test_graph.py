@@ -8,7 +8,9 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from app.teaching_control.errors import AuthorizationError, StaleStateVersionError
 from app.teaching_control.fakes import (
+    FakeInterventionStore,
     FakeOpenHandsExecutor,
+    FakeRequirementEvaluator,
     FakeTeachingEventStore,
     FakeTeachingLLM,
 )
@@ -63,11 +65,17 @@ def make_runtime():
     executor = FakeOpenHandsExecutor()
     llm = FakeTeachingLLM()
     store = FakeTeachingEventStore()
+    requirement_evaluator = FakeRequirementEvaluator()
+    intervention_store = FakeInterventionStore()
+    store.requirement_evaluator = requirement_evaluator
+    store.intervention_store = intervention_store
     graph = build_teaching_graph(
         dependencies=TeachingGraphDependencies(
             executor=executor,
             llm=llm,
             event_store=store,
+            requirement_evaluator=requirement_evaluator,
+            intervention_store=intervention_store,
         ),
         checkpointer=InMemorySaver(),
     )
@@ -133,6 +141,7 @@ def test_c_failure_threshold_creates_recoverable_teacher_interrupt():
     assert payload["state_version"] == 0
     assert payload["reason"] == "failure_threshold_reached"
     assert store.calls == []
+    assert len(store.intervention_store.calls) == 1
 
 
 def test_d_teacher_resume_revalidates_permission_and_state_version():
@@ -295,6 +304,8 @@ def test_j_stage_advances_only_after_passing_assessment():
         failure_origin="none",
         stage_requirements_met=True,
     )
+    store.requirement_evaluator.stage_satisfied = True
+    store.requirement_evaluator.result_refs = ("requirement-result:j2",)
     second = graph.invoke({"incoming_event": ready}, config=config)
 
     assert second["stage_assessment"]["passed"] is True
@@ -303,6 +314,52 @@ def test_j_stage_advances_only_after_passing_assessment():
     assert second["current_stage"] == "prepare_sources"
     assert second["flow_status"] == "READY_FOR_NEXT_STAGE"
     assert len(store.calls) == 3
+
+
+def test_client_stage_requirements_flag_is_ignored():
+    graph, config, _, _, _ = make_runtime()
+    forged = make_event(
+        operation_id="forged-stage-pass",
+        check_passed=True,
+        failure_origin="none",
+        stage_requirements_met=True,
+    )
+    result = graph.invoke(initial_state(forged), config=config)
+    assert result["stage_requirements_met"] is False
+    assert result["stage_index"] == 0
+
+
+def test_assessment_rejects_modification_capability():
+    graph, config, executor, _, _ = make_runtime()
+    policy = {
+        **DEFAULT_POLICY,
+        "allowed_tools": ["safe_patch"],
+        "tool_capabilities": {"safe_patch": "MODIFICATION"},
+    }
+    event = make_event(
+        operation_id="assessment-capability",
+        event_type="run_tool",
+        failure_origin="none",
+        requested_tool="safe_patch",
+    )
+    result = graph.invoke(initial_state(event, mode="assessment", teacher_policy=policy), config=config)
+    assert result["error_code"] == "TOOL_CAPABILITY_FORBIDDEN"
+    assert executor.calls == []
+
+
+def test_l2_defaults_to_persisted_teacher_intervention():
+    graph, config, _, llm, store = make_runtime()
+    policy = {**DEFAULT_POLICY, "failure_threshold": 5, "allow_auto_l2": False}
+    state = initial_state(
+        make_event(operation_id="l2", observation="我已经定位到引用拼接处并完成两次最小验证。"),
+        teacher_policy=policy,
+    )
+    state["student_failure_count"] = 2
+    interrupted = graph.invoke(state, config=config)
+    assert "__interrupt__" in interrupted
+    assert interrupted["__interrupt__"][0].value["reason"] == "l2_authorization_required"
+    assert len(store.intervention_store.calls) == 1
+    assert llm.calls == []
 
 
 def test_state_and_adapter_contracts_exclude_forbidden_authority_and_payloads():

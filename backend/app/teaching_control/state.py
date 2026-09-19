@@ -3,6 +3,7 @@ from typing import Literal, TypedDict
 TeachingMode = Literal["guided_practice", "teacher_demo", "assessment"]
 HelpLevel = Literal["NONE", "L0", "L1", "L2"]
 GuidanceKind = Literal["question", "answer", "code_patch"]
+ToolCapability = Literal["DIAGNOSTIC", "EVALUATION", "MODIFICATION", "GENERATION", "ADMIN"]
 EventType = Literal["check_result", "request_guidance", "run_tool", "submission"]
 FailureOrigin = Literal["none", "student", "infrastructure"]
 CheckStatus = Literal["not_run", "passed", "student_failure", "infrastructure_failure"]
@@ -49,7 +50,6 @@ class TeachingEvent(TypedDict, total=False):
     student_observation: str
     check_passed: bool
     failure_origin: FailureOrigin
-    stage_requirements_met: bool
     requested_guidance_kind: GuidanceKind
     requested_tool: str
 
@@ -60,7 +60,10 @@ class TeachingPolicy(TypedDict):
     require_observation_for_l1: bool
     allow_answer_guidance: bool
     allow_code_patch: bool
+    allow_auto_l2: bool
     allowed_tools: list[str]
+    tool_capabilities: dict[str, ToolCapability]
+    assessment_allowed_capabilities: list[ToolCapability]
 
 
 class TeachingDecision(TypedDict):
@@ -82,6 +85,7 @@ class InterventionRecord(TypedDict):
     intervention_id: str
     reason: str
     requested_state_version: int
+    persisted: bool
 
 
 class TeacherResume(TypedDict):
@@ -89,6 +93,7 @@ class TeacherResume(TypedDict):
     roles: list[str]
     expected_state_version: int
     response: str
+    allow_l2: bool
 
 
 class PersistenceReceipt(TypedDict):
@@ -129,6 +134,7 @@ class TeachingState(TypedDict):
     student_observation: str | None
     latest_check_status: CheckStatus
     stage_requirements_met: bool
+    requirement_result_refs: list[str]
     student_failure_count: int
     infrastructure_failure_count: int
 
@@ -141,6 +147,7 @@ class TeachingState(TypedDict):
     guidance: GuidanceRecord | None
     pending_intervention: InterventionRecord | None
     teacher_resume: TeacherResume | None
+    l2_authorized: bool
     persistence: PersistenceReceipt | None
 
     # A recommendation for workflow movement, never a formal grade.
@@ -155,7 +162,10 @@ DEFAULT_POLICY: TeachingPolicy = {
     "require_observation_for_l1": True,
     "allow_answer_guidance": True,
     "allow_code_patch": False,
+    "allow_auto_l2": False,
     "allowed_tools": ["run_public_checks"],
+    "tool_capabilities": {"run_public_checks": "EVALUATION"},
+    "assessment_allowed_capabilities": ["DIAGNOSTIC", "EVALUATION"],
 }
 
 
@@ -195,6 +205,7 @@ def new_teaching_state(
         "student_observation": None,
         "latest_check_status": "not_run",
         "stage_requirements_met": False,
+        "requirement_result_refs": [],
         "student_failure_count": 0,
         "infrastructure_failure_count": 0,
         "help_level": "NONE",
@@ -210,6 +221,7 @@ def new_teaching_state(
         "guidance": None,
         "pending_intervention": None,
         "teacher_resume": None,
+        "l2_authorized": False,
         "persistence": None,
         "stage_assessment": {
             "passed": False,

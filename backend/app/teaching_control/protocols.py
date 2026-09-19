@@ -55,6 +55,18 @@ class PersistResult:
     duplicate: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class RequirementEvaluation:
+    stage_satisfied: bool
+    result_refs: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class InterventionCreation:
+    intervention_id: str
+    duplicate: bool = False
+
+
 class OpenHandsExecutorProtocol(Protocol):
     """Bounded execution contract; it cannot select teaching stages or help levels."""
 
@@ -78,3 +90,23 @@ class TeachingEventStoreProtocol(Protocol):
         expected_state_version: int,
         event: dict[str, object],
     ) -> PersistResult: ...
+
+
+class RequirementEvaluatorProtocol(Protocol):
+    """Server-side requirement aggregation; client pass flags are never accepted."""
+
+    def evaluate(self, *, attempt_id: str, task_version: str, stage: str) -> RequirementEvaluation: ...
+
+
+class InterventionStoreProtocol(Protocol):
+    """Business fact store called before LangGraph interrupt."""
+
+    def create_intervention(
+        self,
+        *,
+        operation_id: str,
+        attempt_id: str,
+        reason: str,
+        requested_state_version: int,
+        evidence_refs: tuple[str, ...],
+    ) -> InterventionCreation: ...
