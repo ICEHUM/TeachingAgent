@@ -1,0 +1,16 @@
+{
+  "scope": "project",
+  "started_at": "2026-09-19T18:02:04.741963+00:00",
+  "status": "failed",
+  "origins": {
+    "impeccable": "https://github.com/pbakaus/impeccable",
+    "design-taste-frontend": "https://github.com/Leonxlnx/taste-skill"
+  },
+  "installer_versions": {
+    "impeccable": "4.1.0",
+    "skills": "1.7.0"
+  },
+  "hooks_activated": false,
+  "codex_activation_verified": false,
+  "error": "'NoneType' object has no attribute 'strip'"
+}

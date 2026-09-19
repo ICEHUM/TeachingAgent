@@ -1,0 +1,9 @@
+{
+  "sdk_version": "1.49.2",
+  "platform": "linux/amd64",
+  "source_tag": "ghcr.io/openhands/agent-server:1.49.2-python-amd64",
+  "server_image": "ghcr.io/openhands/agent-server@sha256:591264fb1cacf06447d66fb69a2596ef736417633dcc81fbc01d3b1d2aa19f2b",
+  "registry_manifest_verified": true,
+  "container_execution_verified": true,
+  "verified_at": "2026-09-19T15:34:30.774805+00:00"
+}

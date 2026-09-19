@@ -1,0 +1,10 @@
+{
+  "name": "@teachingagent/teacher",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

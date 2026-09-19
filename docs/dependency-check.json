@@ -1,0 +1,33 @@
+{
+  "installed_on": "2026-09-19",
+  "python": "3.12.13",
+  "openhands": "1.49.2",
+  "node": "22.14.0",
+  "react": "19.3.0",
+  "typescript": "7.0.2",
+  "vite": "8.3.0",
+  "checks": {
+    "python_dependencies": "passed",
+    "backend_imports": "passed",
+    "http_smoke": "passed",
+    "student_build_fixture": "passed",
+    "teacher_build_fixture": "passed",
+    "terminal_and_workspace_imports": "passed"
+  },
+  "docker_runtime": "passed",
+  "wsl": "ready",
+  "live_model_test": "passed",
+  "docker_desktop": "4.91.0",
+  "docker_cli": "29.8.0",
+  "wsl_version": "2.7.14.0",
+  "docker_data_root": "D:\\TeachingAgent\\.runtime\\docker-desktop",
+  "live_model_test_scope": [
+    "model_access",
+    "openhands_text_completion",
+    "api_tool_call_schema"
+  ],
+  "model": "deepseek-flash",
+  "model_base_url": "https://api.deepseek.com",
+  "openhands_workspace": "passed",
+  "reboot_required": false
+}

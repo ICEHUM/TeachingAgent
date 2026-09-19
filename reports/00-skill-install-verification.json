@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "checked_at": "2026-09-20T02:07:10+08:00",
+  "project_root": "D:\\TeachingAgent",
+  "scope": "project",
+  "requested_skills": [
+    "impeccable",
+    "design-taste-frontend"
+  ],
+  "pre_install": {
+    "project_skill_root_existed": false,
+    "same_name_targets_existed": false,
+    "git_hooks_existed": false,
+    "codex_hooks_existed": false,
+    "agents_hooks_existed": false
+  },
+  "helper_tests": {
+    "command": "python -B tools/test_installer_offline.py",
+    "exit_code": 0,
+    "tests_run": 4,
+    "passed": 3,
+    "skipped": 1,
+    "skip_reason": "Windows symbolic-link creation unavailable in the current process"
+  },
+  "dry_run": {
+    "exit_code": 0,
+    "reported_scope": "Only requested skill trees will be copied. No hooks activated."
+  },
+  "attempts": [
+    {
+      "report": "reports/skill-install-20260919T180232Z.json",
+      "status": "failed",
+      "installer_versions": {
+        "impeccable": "4.1.0",
+        "skills": "1.7.0"
+      },
+      "observed_console_error": "UnicodeDecodeError: gbk codec could not decode third-party installer output; the wrapper then raised NoneType has no attribute strip",
+      "report_error": "'NoneType' object has no attribute 'strip'",
+      "post_attempt_verify_exit_code": 2,
+      "partial_skill_files_present": false
+    },
+    {
+      "report": "reports/skill-install-20260919T180319Z.json",
+      "status": "skill_files_installed_activation_pending",
+      "environment_adjustment": "PYTHONUTF8=1",
+      "installer_versions": {
+        "impeccable": "4.1.0",
+        "skills": "1.7.0"
+      },
+      "exit_code": 0
+    }
+  ],
+  "final_verify": {
+    "command": "python -B tools/install_design_skills.py --project-root D:\\TeachingAgent --verify-only",
+    "exit_code": 0,
+    "skills": [
+      {
+        "name": "impeccable",
+        "path": ".agents/skills/impeccable",
+        "frontmatter_name_matches": true,
+        "tree_sha256": "d87dbd7c3136eb23a60d3dde9643623ea011d54f9bddbf258ce6f2e955694968"
+      },
+      {
+        "name": "design-taste-frontend",
+        "path": ".agents/skills/design-taste-frontend",
+        "frontmatter_name_matches": true,
+        "tree_sha256": "7631e9da7a7d3be4797fefd7ed86213d19db474e3d16683d42f66dee42457f90"
+      }
+    ]
+  },
+  "hooks": {
+    "activated": false,
+    "git_hooks_existed_after": false,
+    "codex_hooks_existed_after": false,
+    "agents_hooks_existed_after": false
+  },
+  "codex_activation": {
+    "verified": false,
+    "status": "pending_new_project_session",
+    "reason": "The current Codex turn initialized its skill catalog before installation and its working directory is not D:\\TeachingAgent."
+  },
+  "overall_status": "skill_files_installed_activation_pending"
+}

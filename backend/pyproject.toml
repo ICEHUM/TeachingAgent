@@ -1,0 +1,28 @@
+[project]
+name = "teachingagent-backend"
+version = "0.1.0"
+description = "Teaching agent backend and OpenHands integration"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "openhands-sdk==1.49.2",
+    "openhands-tools==1.49.2",
+    "openhands-workspace==1.49.2",
+    "openhands-agent-server==1.49.2",
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "httpx",
+    "python-multipart",
+    "sqlalchemy",
+    "aiosqlite",
+]
+
+[dependency-groups]
+dev = ["pytest", "pytest-asyncio", "ruff"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100

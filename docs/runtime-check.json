@@ -1,0 +1,8 @@
+{
+  "checked_at": "2026-09-19T23:28:27+0800",
+  "status": "ready",
+  "container_smoke": "passed",
+  "docker_cli": "Docker version 29.8.0, build 88096ef",
+  "wsl_version": "WSL 版本: 2.7.14.0\r\n内核版本: 6.18.33.2-2\r\nWSLg 版本: 1.0.73.2\r\nMSRDC 版本: 1.2.7214\r\nDirect3D 版本: 1.611.1-81528511\r\nDXCore 版本: 10.0.26100.1-240331-1435.ge-release\r\nWindows: 10.0.26200.9457",
+  "docker_engine": "linux 29.8.0"
+}

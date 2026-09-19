@@ -1,0 +1,32 @@
+{
+  "scope": "project",
+  "started_at": "2026-09-19T18:02:58.957324+00:00",
+  "status": "skill_files_installed_activation_pending",
+  "origins": {
+    "impeccable": "https://github.com/pbakaus/impeccable",
+    "design-taste-frontend": "https://github.com/Leonxlnx/taste-skill"
+  },
+  "installer_versions": {
+    "impeccable": "4.1.0",
+    "skills": "1.7.0"
+  },
+  "hooks_activated": false,
+  "codex_activation_verified": false,
+  "skills": [
+    {
+      "name": "impeccable",
+      "files_present": true,
+      "origin": "https://github.com/pbakaus/impeccable",
+      "codex_activation_verified": false,
+      "tree_sha256": "d87dbd7c3136eb23a60d3dde9643623ea011d54f9bddbf258ce6f2e955694968"
+    },
+    {
+      "name": "design-taste-frontend",
+      "files_present": true,
+      "origin": "https://github.com/Leonxlnx/taste-skill",
+      "codex_activation_verified": false,
+      "tree_sha256": "7631e9da7a7d3be4797fefd7ed86213d19db474e3d16683d42f66dee42457f90"
+    }
+  ],
+  "note": "Only skill trees copied. Installer hooks were left in temporary staging and not activated. Engines may need a reviewed download on first use."
+}

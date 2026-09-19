@@ -1,0 +1,16 @@
+{
+  "checked_at": "2026-09-19T18:05:30.976571+00:00",
+  "status": "passed",
+  "model_calls": 0,
+  "agent_server_version": "1.49.2",
+  "sdk_command_execution": "passed",
+  "separate_workspace_files": "passed",
+  "host_directory_persistence": "passed",
+  "api_authentication": "passed",
+  "localhost_only": "passed",
+  "workspace_directories": [
+    "D:\\TeachingAgent\\workspaces\\runtime\\teachingagent-450c2287c9c342f7b5dc771b1ec0d8a0",
+    "D:\\TeachingAgent\\workspaces\\runtime\\teachingagent-b33e5e7b64fb41c284e0e6c1b469b6db"
+  ],
+  "container_cleanup": "passed"
+}
