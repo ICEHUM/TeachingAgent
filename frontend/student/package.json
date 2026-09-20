@@ -3,7 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build"
+  },
   "dependencies": {
+    "@monaco-editor/react": "4.7.0",
+    "monaco-editor": "0.56.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   }

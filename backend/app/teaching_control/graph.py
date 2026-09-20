@@ -330,7 +330,27 @@ def decide_action(state: TeachingState) -> dict[str, object]:
             },
             "flow_status": "WAITING_FOR_TEACHER",
         }
+    if event["event_type"] == "request_guidance" and not policy["ai_guidance_enabled"]:
+        return {
+            "decision": {
+                "kind": "persist_only",
+                "reason": "AI guidance is paused for this attempt by the teacher.",
+                "guidance_kind": None,
+                "tool_name": None,
+            },
+            "error_code": "AI_GUIDANCE_PAUSED",
+        }
     if state["latest_check_status"] == "student_failure":
+        if not policy["ai_guidance_enabled"]:
+            return {
+                "decision": {
+                    "kind": "persist_only",
+                    "reason": "Student evidence was recorded while AI guidance is paused.",
+                    "guidance_kind": None,
+                    "tool_name": None,
+                },
+                "error_code": "AI_GUIDANCE_PAUSED",
+            }
         level = _select_help_level(state)
         if level == "L2" and not (policy["allow_auto_l2"] or state["l2_authorized"]):
             operation_id = event["operation_id"]

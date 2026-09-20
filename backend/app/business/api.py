@@ -74,6 +74,7 @@ class InterventionResolve(BaseModel):
     expected_state_version: int
     response: str
     allow_l2: bool = False
+    pause_ai_guidance: bool = False
 
 
 @router.post("/task-versions")
@@ -202,7 +203,21 @@ async def resolve_intervention(intervention_id: str, body: InterventionResolve, 
     if runtime is None:
         raise HTTPException(503, "graph_resume_runtime_not_configured")
     try:
-        await runtime.resume(
+        if body.pause_ai_guidance:
+            item = await session.get(Intervention, intervention_id)
+            attempt = await session.get(Attempt, item.attempt_id) if item else None
+            if attempt is None:
+                raise BusinessRuleError("attempt_not_found")
+            await service.authorize_attempt(session, attempt=attempt, user_id=user.id, teacher=True)
+            attempt.ai_guidance_paused = True
+            await session.commit()
+        elif body.allow_l2:
+            item = await session.get(Intervention, intervention_id)
+            attempt = await session.get(Attempt, item.attempt_id) if item else None
+            if attempt is not None:
+                attempt.ai_guidance_paused = False
+                await session.commit()
+        await runtime.resume_intervention(
             intervention_id=intervention_id,
             teacher_id=user.id,
             resume_operation_id=body.operation_id,

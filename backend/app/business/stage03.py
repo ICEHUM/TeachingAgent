@@ -396,6 +396,7 @@ class PersistentTeachingRuntime:
             policy["assessment_allowed_capabilities"] = list(
                 DEFAULT_TASK_POLICY["assessment_allowed_capabilities"]
             )
+            policy["ai_guidance_enabled"] = not attempt.ai_guidance_paused
             state = new_teaching_state(
                 attempt_id=attempt.id,
                 task_version=f"{task.task_key}-{version.version}",

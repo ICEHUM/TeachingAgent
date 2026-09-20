@@ -1,0 +1,253 @@
+{
+  "student_success": {
+    "attempt_id": "ef885ba8-cd80-4946-a7a0-65c23f303039",
+    "snapshot_a": "255ecbcd-fefb-49db-8d0d-fabf4a924dbb",
+    "snapshot_b": "90c3fbbb-7981-4de7-80fd-b7352756aa67",
+    "snapshot_count": 2,
+    "current_stage": "generate_cited_answer",
+    "state_version": 6,
+    "required_latest_status": {
+      "retrieval_observation": "SATISFIED",
+      "retrieval_public_tests": "SATISFIED"
+    },
+    "requirement_result_history": [
+      {
+        "requirement": "retrieval_public_tests",
+        "kind": "AUTO_TEST",
+        "snapshot": 1,
+        "status": "NOT_SATISFIED",
+        "evaluator": "openhands:run_faq_tests:v1",
+        "operation_id": "tool:ui-run:72df3498-8001-4b26-afe1-c5f447bab916",
+        "evidence_count": 1,
+        "evaluated_at": "2026-09-20T09:28:14.659612+00:00"
+      },
+      {
+        "requirement": "retrieval_public_tests",
+        "kind": "AUTO_TEST",
+        "snapshot": 1,
+        "status": "NOT_SATISFIED",
+        "evaluator": "openhands:run_faq_tests:v1",
+        "operation_id": "tool:ui-run:9bece0ce-c2a6-43a4-a133-046c861152f2",
+        "evidence_count": 1,
+        "evaluated_at": "2026-09-20T09:28:41.632063+00:00"
+      },
+      {
+        "requirement": "retrieval_observation",
+        "kind": "STUDENT_EXPLANATION",
+        "snapshot": 1,
+        "status": "SATISFIED",
+        "evaluator": "server:student_explanation:v1",
+        "operation_id": "observation:persist:ui-run:9bece0ce-c2a6-43a4-a133-046c861152f2",
+        "evidence_count": 1,
+        "evaluated_at": "2026-09-20T09:28:41.659592+00:00"
+      },
+      {
+        "requirement": "retrieval_public_tests",
+        "kind": "AUTO_TEST",
+        "snapshot": 2,
+        "status": "SATISFIED",
+        "evaluator": "openhands:run_faq_tests:v1",
+        "operation_id": "tool:ui-run:2f5bce47-a8e5-4640-a5d7-f1dd7fcc7798",
+        "evidence_count": 1,
+        "evaluated_at": "2026-09-20T09:30:08.170038+00:00"
+      },
+      {
+        "requirement": "retrieval_observation",
+        "kind": "STUDENT_EXPLANATION",
+        "snapshot": 2,
+        "status": "SATISFIED",
+        "evaluator": "server:student_explanation:v1",
+        "operation_id": "observation:persist:ui-run:2f5bce47-a8e5-4640-a5d7-f1dd7fcc7798",
+        "evidence_count": 1,
+        "evaluated_at": "2026-09-20T09:30:08.196344+00:00"
+      }
+    ],
+    "timeline": [
+      {
+        "time": "2026-09-20T09:28:14.683998+00:00",
+        "event_type": "run_tool",
+        "state_version": 1,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "execute_tool",
+        "snapshot_id": "255ecbcd-fefb-49db-8d0d-fabf4a924dbb",
+        "check_status": "student_failure",
+        "guidance_level": null,
+        "guidance_success": null,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:28:16.580613+00:00",
+        "event_type": "request_guidance",
+        "state_version": 2,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "generate_guidance",
+        "snapshot_id": "255ecbcd-fefb-49db-8d0d-fabf4a924dbb",
+        "check_status": "student_failure",
+        "guidance_level": "L0",
+        "guidance_success": true,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:28:41.649677+00:00",
+        "event_type": "run_tool",
+        "state_version": 3,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "execute_tool",
+        "snapshot_id": "255ecbcd-fefb-49db-8d0d-fabf4a924dbb",
+        "check_status": "student_failure",
+        "guidance_level": null,
+        "guidance_success": null,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:28:43.872136+00:00",
+        "event_type": "request_guidance",
+        "state_version": 4,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "generate_guidance",
+        "snapshot_id": "255ecbcd-fefb-49db-8d0d-fabf4a924dbb",
+        "check_status": "student_failure",
+        "guidance_level": "L1",
+        "guidance_success": true,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:30:08.187294+00:00",
+        "event_type": "run_tool",
+        "state_version": 5,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "execute_tool",
+        "snapshot_id": "90c3fbbb-7981-4de7-80fd-b7352756aa67",
+        "check_status": "passed",
+        "guidance_level": null,
+        "guidance_success": null,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:30:08.224629+00:00",
+        "event_type": "stage_advanced",
+        "state_version": 6,
+        "stage": "implement_retrieval",
+        "to_stage": "generate_cited_answer",
+        "decision": null,
+        "snapshot_id": null,
+        "check_status": null,
+        "guidance_level": null,
+        "guidance_success": null,
+        "guidance_fallback_reason": null,
+        "evidence_count": 0
+      }
+    ]
+  },
+  "teacher_resume": {
+    "attempt_id": "69fdcd0e-580d-47fb-9e6a-3492bbde113f",
+    "intervention_id": "5aa75d37-349d-4ae7-ada8-dbdbea6a5287",
+    "status": "RESOLVED",
+    "allow_l2": true,
+    "response_present": true,
+    "state_version": 6,
+    "timeline": [
+      {
+        "time": "2026-09-20T09:23:21.211337+00:00",
+        "event_type": "run_tool",
+        "state_version": 1,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "execute_tool",
+        "snapshot_id": "bb709c26-d652-4995-9b13-cbc30d286df7",
+        "check_status": "student_failure",
+        "guidance_level": null,
+        "guidance_success": null,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:23:24.628488+00:00",
+        "event_type": "request_guidance",
+        "state_version": 2,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "generate_guidance",
+        "snapshot_id": "bb709c26-d652-4995-9b13-cbc30d286df7",
+        "check_status": "student_failure",
+        "guidance_level": "L0",
+        "guidance_success": true,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:23:31.555468+00:00",
+        "event_type": "run_tool",
+        "state_version": 3,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "execute_tool",
+        "snapshot_id": "bb709c26-d652-4995-9b13-cbc30d286df7",
+        "check_status": "student_failure",
+        "guidance_level": null,
+        "guidance_success": null,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:23:34.544522+00:00",
+        "event_type": "request_guidance",
+        "state_version": 4,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "generate_guidance",
+        "snapshot_id": "bb709c26-d652-4995-9b13-cbc30d286df7",
+        "check_status": "student_failure",
+        "guidance_level": "L1",
+        "guidance_success": true,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:23:40.805248+00:00",
+        "event_type": "run_tool",
+        "state_version": 5,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "execute_tool",
+        "snapshot_id": "bb709c26-d652-4995-9b13-cbc30d286df7",
+        "check_status": "student_failure",
+        "guidance_level": null,
+        "guidance_success": null,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      },
+      {
+        "time": "2026-09-20T09:31:11.861750+00:00",
+        "event_type": "request_guidance",
+        "state_version": 6,
+        "stage": "implement_retrieval",
+        "to_stage": null,
+        "decision": "generate_guidance",
+        "snapshot_id": "bb709c26-d652-4995-9b13-cbc30d286df7",
+        "check_status": "student_failure",
+        "guidance_level": "L2",
+        "guidance_success": true,
+        "guidance_fallback_reason": null,
+        "evidence_count": 1
+      }
+    ]
+  },
+  "assertions": {
+    "browser_created_snapshot_b": "PASS",
+    "snapshot_b_only_acceptance": "PASS",
+    "server_aggregated_stage_advance": "PASS",
+    "teacher_resume_completed": "PASS",
+    "post_resume_l2_guidance": "PASS"
+  }
+}

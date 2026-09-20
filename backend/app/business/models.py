@@ -114,6 +114,7 @@ class Attempt(Base):
     state_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     student_failure_count: Mapped[int] = mapped_column(Integer, default=0)
     infrastructure_failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    ai_guidance_paused: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

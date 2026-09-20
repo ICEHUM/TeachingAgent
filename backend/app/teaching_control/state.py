@@ -61,6 +61,7 @@ class TeachingPolicy(TypedDict):
     allow_answer_guidance: bool
     allow_code_patch: bool
     allow_auto_l2: bool
+    ai_guidance_enabled: bool
     allowed_tools: list[str]
     tool_capabilities: dict[str, ToolCapability]
     assessment_allowed_capabilities: list[ToolCapability]
@@ -175,6 +176,7 @@ DEFAULT_POLICY: TeachingPolicy = {
     "allow_answer_guidance": True,
     "allow_code_patch": False,
     "allow_auto_l2": False,
+    "ai_guidance_enabled": True,
     "allowed_tools": [
         "inspect_workspace",
         "run_student_program",

@@ -4,8 +4,13 @@ import os
 
 from fastapi import FastAPI
 
+from .agent.teaching_llm import DeepSeekTeachingLLM
+from .agent.tools import OpenHandsExecutor
+from .agent.workspace import AttemptWorkspaceManager
 from .business.api import router
 from .business.database import create_business_engine, create_session_factory
+from .business.stage03 import PersistentTeachingRuntime
+from .business.stage05_api import router as product_router
 
 
 def _enabled(value: str | None) -> bool:
@@ -31,9 +36,28 @@ def create_app(
     url = database_url or os.environ.get("TEACHING_DATABASE_URL", "sqlite+aiosqlite:///./runtime/teaching.db")
     engine = create_business_engine(url, sqlite_test_mode=sqlite_test_mode or url.startswith("sqlite"))
     app.state.business_engine = engine
-    app.state.session_factory = create_session_factory(engine)
+    session_factory = create_session_factory(engine)
+    app.state.session_factory = session_factory
     app.state.dev_auth_enabled = enable_dev_auth
+    app.state.workspace_manager = AttemptWorkspaceManager()
+    checkpoint_url = (
+        os.environ.get("LANGGRAPH_CHECKPOINT_DATABASE_URL")
+        or os.environ.get("CHECKPOINT_DATABASE_URL")
+    )
+    if checkpoint_url:
+        runtime = PersistentTeachingRuntime(
+            session_factory=session_factory,
+            checkpoint_conninfo=checkpoint_url,
+            executor=OpenHandsExecutor(app.state.workspace_manager),
+            llm=DeepSeekTeachingLLM(),
+        )
+        app.state.teaching_runtime = runtime
+        app.state.graph_resume_runtime = runtime
+    else:
+        app.state.teaching_runtime = None
+        app.state.graph_resume_runtime = None
     app.include_router(router)
+    app.include_router(product_router)
 
     @app.get("/health")
     async def health():
