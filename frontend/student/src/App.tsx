@@ -32,15 +32,27 @@ export function App() {
   const [coachLoading, setCoachLoading] = useState(false);
   const [connection, setConnection] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
   const [toast, setToast] = useState("");
+  const [coachOpen, setCoachOpen] = useState(false);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const saveRef = useRef<() => Promise<string | false>>(async () => false);
+  const stageRef = useRef<string | null>(null);
+  const coachButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const load = useCallback(async () => {
     if (!userId || !attemptId) { setLoading(false); return; }
     try {
       const next = await api<Workbench>(`/api/product/attempts/${attemptId}/workbench`, userId);
       setData(next);
-      setObservation((value) => value || next.student_observation);
+      const stageChanged = stageRef.current !== null && stageRef.current !== next.stage.id;
+      const hasStageEvidence = next.requirements.some((item) => item.status !== "NOT_RUN");
+      if (stageChanged || (stageRef.current === null && !hasStageEvidence)) {
+        setObservation("");
+        setRunMessage("");
+        setRunSnapshot(null);
+      } else if (hasStageEvidence) {
+        setObservation((value) => value || next.student_observation);
+      }
+      stageRef.current = next.stage.id;
       setFatal("");
     } catch (error) {
       setFatal(error instanceof Error ? error.message : "工作台载入失败");
@@ -100,6 +112,18 @@ export function App() {
     return () => clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    if (!coachOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setCoachOpen(false);
+        requestAnimationFrame(() => coachButtonRef.current?.focus());
+      }
+    };
+    addEventListener("keydown", close);
+    return () => removeEventListener("keydown", close);
+  }, [coachOpen]);
+
   const save = useCallback(async (): Promise<string | false> => {
     if (!file || saveState === "saving") return false;
     setSaveState("saving");
@@ -123,6 +147,17 @@ export function App() {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => { void saveRef.current(); });
   };
 
+  function exportDraft() {
+    if (!file) return;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${file.path.split("/").pop() || "student-code"}.local-copy`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function snapshot() {
     if (!file) return;
     let expectedHash = file.hash;
@@ -134,13 +169,13 @@ export function App() {
       await api(`/api/product/attempts/${attemptId}/snapshots`, userId, {
         method: "POST", body: JSON.stringify({ operation_id: newOperation("ui-snapshot"), expected_file_hash: expectedHash }),
       });
-      setToast("已创建新的 Snapshot"); await load();
+      setToast("已创建新的版本快照"); await load();
     } catch (error) { setToast(error instanceof Error ? error.message : "Snapshot 创建失败"); }
   }
 
   async function run() {
-    if (!data?.latest_snapshot) { setToast("请先保存代码并创建 Snapshot"); return; }
-    if (saveState !== "saved") { setToast("当前有未保存修改，请先保存并创建新的 Snapshot"); return; }
+    if (!data?.latest_snapshot) { setToast("请先保存代码并创建版本快照"); return; }
+    if (saveState !== "saved") { setToast("当前有未保存修改，请先保存并创建新的版本快照"); return; }
     setRunSnapshot(data.latest_snapshot.label); setOldSnapshotNotice(false); setRunMessage("等待可用执行资源…"); setRunState("queued");
     await new Promise((resolve) => setTimeout(resolve, 220));
     setRunState("running"); setRunMessage("正在隔离工作区中运行 FAQ 验收…");
@@ -149,7 +184,7 @@ export function App() {
         method: "POST", body: JSON.stringify({ operation_id: newOperation("ui-run"), snapshot_id: data.latest_snapshot.id, expected_state_version: data.attempt.state_version, observation }),
       });
       setRunState("idle");
-      setRunMessage(result.last_tool_status === "succeeded" ? "本次检查通过，验收结果已写入当前 Snapshot。" : result.last_tool_status === "infrastructure_failure" ? "运行环境异常，本次不计入学习失败次数。" : "检查完成：仍有验收项未满足，请查看证据。" );
+      setRunMessage(result.last_tool_status === "succeeded" ? "本次检查通过，验收结果已写入当前版本。" : result.last_tool_status === "infrastructure_failure" ? "运行环境异常，本次不计入学习失败次数。" : "检查完成：仍有验收项未满足，请查看证据。" );
       await load(); setBottomTab("requirements");
     } catch (error) {
       const apiError = error instanceof ApiError ? error : null;
@@ -182,7 +217,8 @@ export function App() {
   if (loading) return <Loading />;
   if (fatal || !data) return <Fatal message={fatal || "工作台不可用"} retry={() => { setLoading(true); void load(); }} />;
 
-  const guidanceData = data.guidance;
+  const hasCurrentEvidence = data.requirements.some((item) => item.status !== "NOT_RUN");
+  const guidanceData = hasCurrentEvidence ? data.guidance : null;
   const waitingTeacher = data.intervention?.status === "WAITING_TEACHER";
 
   return <div className="app-shell">
@@ -193,12 +229,14 @@ export function App() {
         <span className={`connection ${connection}`}><i />{connection === "connected" ? "已连接" : connection === "offline" ? "网络断开" : "正在重连"}</span>
         <span className={`save-state ${saveState}`} aria-live="polite">{({ saved: "已保存", dirty: "未保存", saving: "保存中…", failed: "保存失败，代码仍在编辑器中" } as const)[saveState]}</span>
         {saveState === "failed" && <button className="save-retry" onClick={() => void save()}>重试保存</button>}
+        <button ref={coachButtonRef} className="coach-toggle" aria-controls="student-coach" aria-expanded={coachOpen} onClick={() => setCoachOpen((value) => !value)}>实训教练</button>
         <span className="avatar" aria-label={`当前学生：${data.identity.display_name}`}>{data.identity.display_name.slice(0, 1)}</span>
       </div>
     </header>
 
     {oldSnapshotNotice && <div className="snapshot-banner" role="status">本次检查基于 {runSnapshot}；当前编辑内容尚未包含在此次结果中。</div>}
     {waitingTeacher && <div className="teacher-banner" role="status"><strong>正在等待教师</strong><span>你的代码和证据已保留，可以继续查看任务与运行结果。</span></div>}
+    {saveState === "failed" && <div className="save-recovery" role="alert"><div><strong>代码尚未保存</strong><span>编辑器中的内容仍然保留。请重试；若冲突持续，可先导出本地副本。</span></div><div><button onClick={() => void save()}>重试保存</button><button onClick={exportDraft}>导出本地代码</button><button onClick={() => { if (confirm("重新读取将放弃编辑器中尚未保存的内容，是否继续？")) void loadFile(activeFile); }}>重新读取</button></div></div>}
 
     <main className="workspace-grid">
       <aside className="task-pane" aria-label="任务与阶段">
@@ -209,8 +247,10 @@ export function App() {
 
       <section className="code-pane" aria-label="Workspace 代码区">
         <div className="workspace-toolbar">
-          <div><span className="eyebrow">WORKSPACE</span><strong>{activeFile}</strong></div>
-          <div className="toolbar-actions"><button className="button secondary" onClick={() => void save()} disabled={saveState === "saving" || saveState === "saved"}>保存 <kbd>Ctrl S</kbd></button><button className="button secondary" onClick={() => void snapshot()} disabled={saveState === "saving"}>创建 Snapshot</button><button className="button primary" onClick={() => void run()} disabled={runState === "queued" || runState === "running" || waitingTeacher}>{runState === "queued" ? "运行排队" : runState === "running" ? "运行中…" : "运行检查"}</button></div>
+          <div className="file-context"><span className="eyebrow">代码区</span><strong>{activeFile}</strong></div>
+          <div className="version-context" aria-label="当前版本状态"><span>已检查版本</span><b>{data.latest_snapshot?.label || "尚未创建"}</b></div>
+          <div className="toolbar-actions"><button className="button secondary" onClick={() => void save()} disabled={saveState === "saving" || saveState === "saved"}>保存 <kbd>Ctrl S</kbd></button><button className="button secondary" onClick={() => void snapshot()} disabled={saveState === "saving"}>创建版本快照</button><button className="button primary" onClick={() => void run()} disabled={runState === "queued" || runState === "running" || waitingTeacher}>{runState === "queued" ? "运行排队" : runState === "running" ? "运行中…" : "运行检查"}</button></div>
+          <p className="mobile-ide-note">手机适合查看任务、反馈与求助；完整编码建议使用电脑。</p>
         </div>
         <div className="editor-zone">
           <nav className="file-tree" aria-label="文件列表">{data.files.map((item) => <button key={item.path} className={item.path === activeFile ? "active" : ""} onClick={() => { if (saveState === "dirty" && !confirm("当前文件有未保存修改，仍要切换吗？")) return; void loadFile(item.path); }}><span className="file-ext">{item.name.split(".").pop()?.toUpperCase()}</span><span>{item.path}</span></button>)}</nav>
@@ -221,19 +261,20 @@ export function App() {
         </div>
         <div className="result-panel">
           <div className="tabs" role="tablist" aria-label="运行与验收"><button role="tab" aria-selected={bottomTab === "result"} onClick={() => setBottomTab("result")}>运行结果</button><button role="tab" aria-selected={bottomTab === "requirements"} onClick={() => setBottomTab("requirements")}>验收 <span>{data.requirement_summary.satisfied_count}/{data.requirement_summary.required_count}</span></button><button role="tab" aria-selected={bottomTab === "preview"} onClick={() => setBottomTab("preview")}>成果预览</button></div>
-          {bottomTab === "result" && <div className="result-content" role="tabpanel"><RunStateView state={runState} message={runMessage} snapshot={runSnapshot || data.latest_snapshot?.label || "尚未创建 Snapshot"} /></div>}
-          {bottomTab === "requirements" && <div className="requirement-table" role="tabpanel"><div className="table-head"><span>验收项</span><span>状态</span><span>Snapshot</span><span>Evaluator</span><span>最近更新</span></div>{data.requirements.map((item) => <button className="table-row" key={item.id} disabled={!item.operation_id} onClick={() => void openEvidence(item)}><span><b>{item.name}</b><small>{item.kind.replaceAll("_", " ")}</small></span><span className={`status-text ${item.status.toLowerCase()}`}>{statusLabel(item.status)}{item.has_old_result && <small>旧证据不参与当前验收</small>}</span><span>{item.snapshot_label || "—"}</span><span className="mono">{item.evaluator}</span><span>{item.evaluated_at ? formatTime(item.evaluated_at) : "—"}</span></button>)}</div>}
-          {bottomTab === "preview" && <div className="preview-empty" role="tabpanel"><strong>FAQ 服务成果预览</strong><p>当前阶段通过后，这里将展示基于学生代码运行的问答结果。预览不会替代验收。</p><dl><div><dt>当前代码</dt><dd>{data.latest_snapshot?.label || "尚未创建 Snapshot"}</dd></div><div><dt>阶段状态</dt><dd>{data.requirement_summary.satisfied ? "已满足" : `${data.requirement_summary.satisfied_count} / ${data.requirement_summary.required_count} 已满足`}</dd></div></dl></div>}
+          {bottomTab === "result" && <div className="result-content" role="tabpanel"><RunStateView state={runState} message={runMessage} snapshot={runSnapshot || data.latest_snapshot?.label || "尚未创建版本快照"} /></div>}
+          {bottomTab === "requirements" && <div className="requirement-table" role="tabpanel"><div className="table-head"><span>验收项</span><span>状态</span><span>版本快照</span><span>检查器</span><span>最近更新</span></div>{data.requirements.map((item) => <button className="table-row" key={item.id} disabled={!item.operation_id} onClick={() => void openEvidence(item)}><span><b>{item.name}</b><small>{item.kind.replaceAll("_", " ")}</small></span><span className={`status-text ${item.status.toLowerCase()}`}>{statusLabel(item.status)}{item.has_old_result && <small>旧证据不参与当前验收</small>}</span><span>{item.snapshot_label || "—"}</span><span className="mono">{item.evaluator}</span><span>{item.evaluated_at ? formatTime(item.evaluated_at) : "—"}</span></button>)}</div>}
+          {bottomTab === "preview" && <div className="preview-empty" role="tabpanel"><strong>FAQ 服务成果预览</strong><p>当前阶段通过后，这里将展示基于学生代码运行的问答结果。预览不会替代验收。</p><dl><div><dt>当前代码</dt><dd>{data.latest_snapshot?.label || "尚未创建版本快照"}</dd></div><div><dt>阶段状态</dt><dd>{data.requirement_summary.satisfied ? "已满足" : `${data.requirement_summary.satisfied_count} / ${data.requirement_summary.required_count} 已满足`}</dd></div></dl></div>}
         </div>
       </section>
 
-      <aside className="coach-pane" aria-label="实训教练">
-        <div className="coach-head"><div><span className="eyebrow">实训教练</span><h2>基于证据的下一步</h2></div>{guidanceData?.level && <span className={`help-level ${guidanceData.level.toLowerCase()}`}>{helpLabel(guidanceData.level)}</span>}</div>
+      {coachOpen && <button className="coach-backdrop" aria-label="关闭实训教练" onClick={() => { setCoachOpen(false); coachButtonRef.current?.focus(); }} />}
+      <aside id="student-coach" className={`coach-pane ${coachOpen ? "open" : ""}`} aria-label="实训教练">
+        <div className="coach-head"><div><span className="eyebrow">学习支持</span><h2>实训教练</h2></div><div className="coach-head-actions">{guidanceData?.level && <span className={`help-level ${guidanceData.level.toLowerCase()}`}>{helpLabel(guidanceData.level)}</span>}<button className="coach-close" onClick={() => { setCoachOpen(false); coachButtonRef.current?.focus(); }} aria-label="关闭实训教练">关闭</button></div></div>
         <CoachSection label="当前观察"><p>{runState === "running" ? `正在检查 ${runSnapshot}…` : runMessage || (data.requirement_summary.satisfied ? "当前阶段验收项已满足。" : "运行检查后，教练会根据真实证据给出下一步。")}</p></CoachSection>
-        <CoachSection label="证据"><div className="evidence-summary">{data.requirements.filter((item) => item.status !== "NOT_RUN").slice(0, 3).map((item) => <button key={item.id} onClick={() => void openEvidence(item)}><span className={item.status === "SATISFIED" ? "ok" : "bad"}>{item.status === "SATISFIED" ? "通过" : "未通过"}</span><span>{item.name}</span><small>{item.snapshot_label}</small></button>)}{!data.requirements.some((item) => item.status !== "NOT_RUN") && <p className="muted">尚无当前 Snapshot 的验收证据。</p>}</div></CoachSection>
+        <CoachSection label="证据"><div className="evidence-summary">{data.requirements.filter((item) => item.status !== "NOT_RUN").slice(0, 3).map((item) => <button key={item.id} onClick={() => void openEvidence(item)}><span className={item.status === "SATISFIED" ? "ok" : "bad"}>{item.status === "SATISFIED" ? "通过" : "未通过"}</span><span>{item.name}</span><small>{item.snapshot_label}</small></button>)}{!data.requirements.some((item) => item.status !== "NOT_RUN") && <p className="muted">尚无当前版本的验收证据。</p>}</div></CoachSection>
         <CoachSection label="本轮指导">{coachLoading ? <div className="coach-generating"><i /><span>正在根据本次运行证据生成指导…</span><small>你仍可以继续编辑代码</small></div> : guidanceData ? <div className="guidance"><p>{guidanceData.message}</p>{guidanceData.success === false && <div className="fallback-note">智能指导暂不可用，已显示安全模板。你仍可以继续编辑和运行检查。</div>}</div> : <p className="muted">完成一次运行检查后可请求指导。</p>}</CoachSection>
-        <CoachSection label="学生观察"><label className="sr-only" htmlFor="observation">记录你观察到的现象</label><textarea id="observation" value={observation} onChange={(event) => setObservation(event.target.value)} placeholder="例如：资料已成功加载，但已知问题的检索结果仍为空；未知问题返回空结果。" rows={5} maxLength={1200}/><div className="textarea-meta"><span>{observation.length}/1200</span><span>观察会随下次运行写入当前 Snapshot 的验收记录</span></div></CoachSection>
-        <CoachSection label="下一步行动"><p>{guidanceData?.next_step || "保存修改，创建新的 Snapshot，再运行验收。"}</p><button className="button coach-action" onClick={() => void guidance()} disabled={coachLoading || waitingTeacher || data.attempt.ai_guidance_paused}>{data.attempt.ai_guidance_paused ? "教师已暂停智能指导" : "请求本轮指导"}</button></CoachSection>
+        <CoachSection label="学生观察"><label className="sr-only" htmlFor="observation">记录你观察到的现象</label><textarea id="observation" value={observation} onChange={(event) => setObservation(event.target.value)} placeholder="例如：资料已成功加载，但已知问题的检索结果仍为空；未知问题返回空结果。" rows={5} maxLength={1200}/><div className="textarea-meta"><span>{observation.length}/1200</span><span>观察会随下次运行写入当前版本的验收记录</span></div></CoachSection>
+        <CoachSection label="下一步行动"><p>{guidanceData?.next_step || "保存修改，创建新的版本快照，再运行验收。"}</p><button className="button coach-action" onClick={() => void guidance()} disabled={coachLoading || waitingTeacher || data.attempt.ai_guidance_paused}>{data.attempt.ai_guidance_paused ? "教师已暂停智能指导" : "请求本轮指导"}</button></CoachSection>
       </aside>
     </main>
 
@@ -246,12 +287,12 @@ function CoachSection({ label, children }: { label: string; children: React.Reac
 
 function RunStateView({ state, message, snapshot }: { state: RunState; message: string; snapshot: string }) {
   const title = ({ idle: message ? "检查已完成" : "等待运行", queued: "运行排队", running: "正在运行", timeout: "运行超时", failed: "运行失败" } as const)[state];
-  return <div className={`run-state ${state}`}><div className="run-indicator" aria-hidden="true">{state === "running" || state === "queued" ? <i /> : state === "idle" && message ? "✓" : state === "idle" ? "·" : "!"}</div><div><strong>{title}</strong><p>{message || "保存代码并创建 Snapshot 后运行验收。"}</p><span>绑定版本：{snapshot}</span></div></div>;
+  return <div className={`run-state ${state}`}><div className="run-indicator" aria-hidden="true">{state === "running" || state === "queued" ? <i /> : state === "idle" && message ? "✓" : state === "idle" ? "·" : "!"}</div><div><strong>{title}</strong><p>{message || "保存代码并创建版本快照 后运行验收。"}</p><span>绑定版本：{snapshot}</span></div></div>;
 }
 
 function EvidenceDrawer({ evidence, loading, onClose }: { evidence: Evidence | null; loading: boolean; onClose: () => void }) {
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; addEventListener("keydown", close); return () => removeEventListener("keydown", close); }, [onClose]);
-  return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="关闭证据详情" onClick={onClose}/><aside className="evidence-drawer" role="dialog" aria-modal="true" aria-labelledby="evidence-title"><header><div><span className="eyebrow">EVIDENCE</span><h2 id="evidence-title">验收证据</h2></div><button className="icon-close" onClick={onClose} autoFocus aria-label="关闭">×</button></header>{loading || !evidence ? <div className="drawer-loading"><i/><span>正在读取有界证据…</span></div> : <div className="drawer-body"><dl className="evidence-meta"><div><dt>Requirement</dt><dd>{evidence.requirement}</dd></div><div><dt>状态</dt><dd><span className={`status-pill ${evidence.status.toLowerCase()}`}>{statusLabel(evidence.status)}</span></dd></div><div><dt>Snapshot</dt><dd>{evidence.snapshot}</dd></div><div><dt>Tool</dt><dd className="mono">{evidence.tool}</dd></div><div><dt>Operation</dt><dd className="mono wrap">{evidence.operation}</dd></div><div><dt>Reason code</dt><dd className="mono">{evidence.reason_code}</dd></div><div><dt>时间</dt><dd>{new Date(evidence.observed_at).toLocaleString("zh-CN")}</dd></div></dl><section><h3>有界输出摘要</h3><pre>{evidence.stdout_summary || "本次工具未产生可展示的标准输出。"}</pre>{evidence.stdout_truncated && <p className="bounded-note">输出已按安全上限截断。</p>}</section><section><h3>Artifact</h3>{evidence.artifacts.map((artifact) => <div className="artifact-row" key={artifact.ref}><div><strong>{artifact.kind}</strong><span className="mono">{artifact.ref}</span></div><b>{artifact.available ? "可追溯" : "记录缺失"}</b></div>)}</section><footer>证据视图已隐藏宿主路径、容器令牌、模型密钥和内部数据库标识。</footer></div>}</aside></div>;
+  return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="关闭证据详情" onClick={onClose}/><aside className="evidence-drawer" role="dialog" aria-modal="true" aria-labelledby="evidence-title"><header><div><span className="eyebrow">EVIDENCE</span><h2 id="evidence-title">验收证据</h2></div><button className="icon-close" onClick={onClose} autoFocus aria-label="关闭">×</button></header>{loading || !evidence ? <div className="drawer-loading"><i/><span>正在读取有界证据…</span></div> : <div className="drawer-body"><dl className="evidence-meta"><div><dt>验收项</dt><dd>{evidence.requirement}</dd></div><div><dt>状态</dt><dd><span className={`status-pill ${evidence.status.toLowerCase()}`}>{statusLabel(evidence.status)}</span></dd></div><div><dt>版本快照</dt><dd>{evidence.snapshot}</dd></div><div><dt>检查工具</dt><dd className="mono">{evidence.tool}</dd></div><div><dt>操作编号</dt><dd className="mono wrap">{evidence.operation}</dd></div><div><dt>结果代码</dt><dd className="mono">{evidence.reason_code}</dd></div><div><dt>时间</dt><dd>{new Date(evidence.observed_at).toLocaleString("zh-CN")}</dd></div></dl><section><h3>有界输出摘要</h3><pre>{evidence.stdout_summary || "本次工具未产生可展示的标准输出。"}</pre>{evidence.stdout_truncated && <p className="bounded-note">输出已按安全上限截断。</p>}</section><section><h3>运行产物</h3>{evidence.artifacts.map((artifact) => <div className="artifact-row" key={artifact.ref}><div><strong>{artifact.kind}</strong><span className="mono">{artifact.ref}</span></div><b>{artifact.available ? "可追溯" : "记录缺失"}</b></div>)}</section><footer>证据视图已隐藏宿主路径、容器令牌、模型密钥和内部数据库标识。</footer></div>}</aside></div>;
 }
 
 function EditorLoading() { return <div className="editor-loading"><i/><span>正在启动 Workspace 编辑器…</span></div>; }

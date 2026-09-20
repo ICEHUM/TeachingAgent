@@ -134,3 +134,90 @@ blockquote { margin: 0; padding: 9px 11px; border-left: 2px solid var(--accent);
   .list-columns, .student-row { min-width: 620px; }
   .classroom-list { overflow-x: auto; }
 }
+
+
+/* Stage 05A product polish: classroom-first hierarchy and compact evidence review. */
+.teacher-app { height: 100dvh; }
+.topbar { padding-inline: 20px; }
+.teacher-layout { height: calc(100dvh - var(--topbar-height)); grid-template-columns: minmax(620px,1fr) 430px; }
+.list-head { height: 88px; }
+.list-head h1 { font-size: 20px; line-height: 1.25; }
+.eyebrow { font-size: 10px; letter-spacing: .04em; text-transform: none; }
+.refresh { min-height: 36px; padding-inline: 13px; font-size: 12px; }
+.group-tabs { height: 48px; }
+.group-tabs button { font-size: 13px; }
+.group-tabs b { font-size: 10px; }
+.list-columns { height: 36px; font-size: 10px; letter-spacing: 0; text-transform: none; }
+.student-list { height: calc(100% - 172px); }
+.student-row { min-height: 70px; font-size: 12px; transition: background 120ms ease; }
+.student-cell b { font-size: 13px; }
+.student-cell small, .reason { font-size: 11px; }
+.student-row small.danger { font-size: 10px; }
+.detail-head { min-height: 88px; }
+.detail-head h2 { font-size: 18px; }
+.detail-head p { font-size: 11px; }
+.detail-back { display: none; min-height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: white; font-size: 12px; cursor: pointer; }
+.detail-content { height: calc(100% - 88px); display: grid; grid-template-rows: minmax(0,1fr) auto; overflow: hidden; }
+.detail-scroll { height: auto; min-height: 0; padding-bottom: 0; }
+.detail-section { padding: 16px; }
+.detail-section h3, .teacher-actions h3 { color: var(--text-primary); font-size: 12px; letter-spacing: 0; text-transform: none; }
+.requirement-focus b { font-size: 14px; }
+.requirement-focus dt, .requirement-focus > div span { font-size: 10px; }
+.requirement-focus dd { font-size: 11px; }
+blockquote { font-size: 12px; }
+.detail-disclosure { border-bottom: 1px solid var(--border); background: var(--surface-panel); }
+.detail-disclosure > summary { min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; color: var(--text-primary); font-size: 12px; font-weight: 700; cursor: pointer; list-style: none; }
+.detail-disclosure > summary::-webkit-details-marker { display: none; }
+.detail-disclosure > summary::before { content: "+"; order: 2; color: var(--text-muted); font: 600 16px var(--font-mono); }
+.detail-disclosure[open] > summary::before { content: "−"; }
+.detail-disclosure > summary small { margin-left: auto; color: var(--text-muted); font-size: 10px; font-weight: 500; }
+.disclosure-body { padding: 0 16px 14px; }
+.guidance-history article p, .agent-trace small { font-size: 11px; }
+.action-dock { position: relative; z-index: 3; padding: 12px 16px 14px; border-top: 1px solid var(--border-strong); background: var(--surface-panel); box-shadow: 0 -10px 24px rgba(17,24,39,.06); }
+.action-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.action-heading h3 { margin: 0; }
+.action-heading p { margin: 3px 0 0; color: var(--text-muted); font-size: 10px; }
+.action-heading > span { padding: 3px 7px; border-radius: 4px; background: var(--warning-soft); color: var(--warning); font-size: 10px; font-weight: 700; }
+.teacher-actions textarea { min-height: 56px; font-size: 12px; }
+.action-grid { gap: 8px; margin-top: 10px; }
+.action-grid button { min-height: 36px; font-size: 11px; }
+.detail-backdrop { display: none; }
+
+@media (max-width: 1050px) {
+  .teacher-layout { grid-template-columns: 1fr; }
+  .detail-backdrop { position: fixed; z-index: 9; inset: var(--topbar-height) 0 0; display: block; border: 0; background: rgba(17,24,39,.28); }
+  .intervention-panel { z-index: 10; width: min(460px, 100vw); transform: translateX(102%); visibility: hidden; transition: transform 160ms ease, visibility 160ms ease; }
+  .intervention-panel.open { transform: translateX(0); visibility: visible; }
+  .detail-back { display: inline-flex; align-items: center; }
+  .detail-head { justify-content: flex-start; }
+  .detail-head > div { min-width: 0; }
+  .detail-head .intervention-status { margin-left: auto; }
+}
+
+@media (max-width: 720px) {
+  .topbar { padding-inline: 12px; }
+  .brand strong, .connection small { display: none; }
+  .list-head { height: auto; min-height: 84px; padding: 14px 16px; }
+  .list-head h1 { font-size: 18px; }
+  .group-tabs { padding: 0 12px; gap: 14px; overflow-x: auto; }
+  .group-tabs button { min-width: max-content; }
+  .list-columns { display: none; }
+  .student-list { height: calc(100% - 132px); }
+  .classroom-list { overflow: hidden; }
+  .student-row { min-width: 0; min-height: 96px; grid-template-columns: minmax(0,1fr) auto; gap: 6px 12px; padding: 12px 16px; }
+  .student-row > span:nth-child(2) { text-align: right; }
+  .student-row > span:nth-child(3), .student-row > span:nth-child(4), .student-row > span:nth-child(5) { color: var(--text-muted); font-size: 11px; }
+  .student-row > span:nth-child(3)::before { content: "失败 "; }
+  .student-row > span:nth-child(4)::before { content: "帮助 "; }
+  .student-row > span:nth-child(5)::before { content: "等待 "; }
+  .student-row > span:nth-child(5) { text-align: right; }
+  .intervention-panel { top: 0; width: 100vw; }
+  .detail-backdrop { inset: 0; }
+  .detail-head { min-height: 76px; padding: 10px 12px; }
+  .detail-head .eyebrow { display: none; }
+  .detail-content { height: calc(100% - 76px); }
+  .action-grid button { min-height: 44px; }
+  .teacher-actions textarea { min-height: 64px; }
+}
+
+.action-grid button.primary:disabled { border-color: var(--border); background: var(--surface-subtle); color: var(--text-muted); }

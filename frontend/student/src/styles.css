@@ -158,7 +158,7 @@
 .artifact-row > div { display: grid; gap: 4px; min-width: 0; }
 .artifact-row span { overflow-wrap: anywhere; color: var(--text-muted); }
 .artifact-row > b { display: block; margin-top: 7px; color: var(--success); font-size: 10px; }
-.drawer-body footer { padding: var(--space-3); border-left: 2px solid var(--border-strong); color: var(--text-muted); font-size: 10px; line-height: 1.5; }
+.drawer-body footer { padding: var(--space-3); border-top: 1px solid var(--border); color: var(--text-muted); font-size: 10px; line-height: 1.5; }
 .drawer-loading { height: 180px; }
 .toast { position: fixed; z-index: 30; right: var(--space-4); bottom: var(--space-4); max-width: 360px; padding: 10px 13px; border: 1px solid #9ba8b9; border-radius: var(--radius-control); background: #172033; color: white; box-shadow: var(--shadow-float); font-size: 12px; }
 
@@ -191,4 +191,91 @@
   .coach-pane { position: static; width: auto; box-shadow: none; border: 0; }
   .editor-zone { grid-template-columns: 120px minmax(0,1fr); }
   .crumb { display: none; }
+}
+
+
+/* Stage 05A product polish: task clarity, responsive coach, and durable recovery. */
+.app-shell { height: 100dvh; }
+.topbar { padding-inline: 20px; }
+.brand { min-width: 184px; }
+.brand-mark { box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.coach-toggle { display: none; min-height: 34px; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-panel); color: var(--text-secondary); font-size: 12px; font-weight: 650; cursor: pointer; }
+.save-recovery { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 9px 20px; border-bottom: 1px solid #e6c55f; background: var(--warning-soft); color: #6d4c00; }
+.save-recovery > div:first-child { display: grid; gap: 2px; }
+.save-recovery strong { font-size: 12px; }
+.save-recovery span { font-size: 11px; }
+.save-recovery > div:last-child { display: flex; gap: 8px; }
+.save-recovery button { min-height: 32px; padding: 0 10px; border: 1px solid #d7b94c; border-radius: var(--radius-control); background: #fffdf6; color: #6d4c00; font-size: 11px; font-weight: 700; cursor: pointer; }
+.file-context { min-width: 0; }
+.version-context { display: grid; gap: 2px; margin-left: auto; padding-right: 4px; text-align: right; }
+.version-context span { color: var(--text-muted); font-size: 10px; }
+.version-context b { color: var(--text-secondary); font: 600 11px var(--font-mono); }
+.mobile-ide-note { display: none; }
+.button { min-height: 36px; }
+.workspace-toolbar { min-height: 56px; padding-inline: 14px; }
+.code-pane { grid-template-rows: 56px minmax(270px, 1fr) 252px; }
+.tabs { height: 40px; }
+.result-content, .preview-empty, .requirement-table { height: calc(100% - 40px); }
+.tabs button { font-size: 12px; }
+.coach-head { min-height: 64px; }
+.coach-head h2 { font-size: 15px; letter-spacing: -.01em; }
+.coach-head-actions { display: flex; align-items: center; gap: 8px; }
+.coach-close { display: none; min-height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); background: white; font-size: 12px; cursor: pointer; }
+.coach-section { padding: 14px 16px; }
+.coach-section h3 { font-size: 11px; letter-spacing: 0; text-transform: none; }
+.coach-section p { font-size: 13px; line-height: 1.65; }
+.textarea-meta { font-size: 10px; }
+.coach-backdrop { display: none; }
+.drawer-body footer { border-left: 0; border-top: 1px solid var(--border); background: var(--surface-subtle); }
+
+@media (max-width: 1120px) {
+  .workspace-grid { grid-template-columns: 220px minmax(0,1fr); }
+  .coach-toggle { display: inline-flex; align-items: center; }
+  .coach-backdrop { position: fixed; z-index: 7; inset: var(--topbar-height) 0 0; display: block; border: 0; background: rgba(17,24,39,.28); }
+  .coach-pane { position: fixed; z-index: 8; top: var(--topbar-height); right: 0; bottom: 0; width: min(380px, 92vw); padding-bottom: 24px; border-left: 1px solid var(--border); box-shadow: var(--shadow-float); transform: translateX(102%); visibility: hidden; transition: transform 160ms ease, visibility 160ms ease; }
+  .coach-pane.open { transform: translateX(0); visibility: visible; }
+  .coach-close { display: inline-flex; align-items: center; }
+}
+
+@media (max-width: 900px) {
+  .app-shell { height: auto; min-height: 100dvh; overflow: auto; }
+  .workspace-grid { min-height: calc(100dvh - var(--topbar-height)); }
+  .code-pane { min-height: 700px; }
+  .coach-pane { position: fixed; width: min(420px, 100vw); border-left: 1px solid var(--border); box-shadow: var(--shadow-float); }
+  .top-actions .save-state { display: none; }
+}
+
+@media (max-width: 767px) {
+  .topbar { padding-inline: 12px; gap: 8px; }
+  .brand { min-width: 0; }
+  .brand strong, .connection, .avatar { display: none; }
+  .coach-toggle { min-height: 40px; }
+  .save-recovery { align-items: stretch; flex-direction: column; padding: 12px; }
+  .save-recovery > div:last-child { display: grid; grid-template-columns: 1fr 1fr; }
+  .save-recovery button { min-height: 40px; }
+  .task-head { padding: 16px; }
+  .pane-section { padding: 12px 16px; }
+  .stage-list { display: block; }
+  .stage-list li:not(.current) { display: none; }
+  .requirement-compact { display: none; }
+  .code-pane { min-height: 840px; display: grid; grid-template-rows: auto 260px minmax(440px,1fr); }
+  .workspace-toolbar { order: 1; align-items: flex-start; flex-wrap: wrap; padding: 10px 12px; }
+  .file-context { width: calc(100% - 110px); }
+  .version-context { width: 100px; }
+  .toolbar-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .toolbar-actions .button { min-height: 44px; }
+  .toolbar-actions .button.primary { grid-column: 1 / -1; }
+  .mobile-ide-note { display: block; width: 100%; margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }
+  .result-panel { order: 2; }
+  .editor-zone { order: 3; grid-template-columns: 92px minmax(0,1fr); min-height: 440px; }
+  .file-tree { padding-inline: 4px; }
+  .file-tree button { grid-template-columns: 1fr; gap: 2px; padding: 6px; overflow: hidden; }
+  .file-tree button span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .table-head, .table-row { min-width: 620px; }
+  .coach-pane { top: 0; width: 100vw; }
+  .coach-head { padding: 12px 16px; }
+  .coach-close { min-height: 40px; }
+  .coach-section textarea { min-height: 110px; }
+  .drawer-layer { z-index: 30; }
+  .evidence-drawer { width: 100vw; }
 }
