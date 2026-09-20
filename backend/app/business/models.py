@@ -142,10 +142,17 @@ class TeachingEvent(Base):
 
 class RequirementResult(Base):
     __tablename__ = "requirement_results"
-    __table_args__ = (UniqueConstraint("attempt_id", "requirement_id", "version"), {"schema": BUSINESS_SCHEMA})
+    __table_args__ = (
+        UniqueConstraint("attempt_id", "operation_id"),
+        {"schema": BUSINESS_SCHEMA},
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     attempt_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.attempts.id"), index=True)
     requirement_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.requirement_definitions.id"), index=True)
+    snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey(f"{BUSINESS_SCHEMA}.snapshots.id"), index=True
+    )
+    operation_id: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     evaluator: Mapped[str] = mapped_column(String(120), nullable=False)
     evidence_refs: Mapped[list] = mapped_column(JSON, default=list)

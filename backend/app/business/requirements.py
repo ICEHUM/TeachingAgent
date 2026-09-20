@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Attempt, RequirementDefinition, RequirementResult, TaskStage
+from .models import Attempt, RequirementDefinition, RequirementResult, Snapshot, TaskStage
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,14 +30,28 @@ class RequirementEvaluator:
         )).all())
         if not definitions:
             return StageRequirementAggregate(False, 0, 0, ())
+        snapshot = await session.scalar(
+            select(Snapshot)
+            .where(Snapshot.attempt_id == attempt_id)
+            .order_by(Snapshot.sequence.desc())
+            .limit(1)
+        )
+        if snapshot is None:
+            return StageRequirementAggregate(False, len(definitions), 0, ())
         definition_ids = [item.id for item in definitions]
         results = list((await session.scalars(
             select(RequirementResult).where(
                 RequirementResult.attempt_id == attempt_id,
                 RequirementResult.requirement_id.in_(definition_ids),
-            )
+                RequirementResult.snapshot_id == snapshot.id,
+            ).order_by(RequirementResult.evaluated_at, RequirementResult.id)
         )).all())
-        passed = {result.requirement_id: result for result in results if result.status == "SATISFIED"}
+        latest = {result.requirement_id: result for result in results}
+        passed = {
+            requirement_id: result
+            for requirement_id, result in latest.items()
+            if result.status == "SATISFIED"
+        }
         return StageRequirementAggregate(
             satisfied=len(passed) == len(definitions),
             required_count=len(definitions),

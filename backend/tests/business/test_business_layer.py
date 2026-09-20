@@ -13,6 +13,7 @@ from app.business.models import (
     Intervention,
     OperationLedger,
     RequirementDefinition,
+    Snapshot,
     TeachingEvent,
     User,
 )
@@ -44,6 +45,11 @@ async def seed(factory):
         version = await service.create_faq_version(session, course_id=course.id, actor_id=teacher.id)
         attempt1 = await service.create_attempt(session, task_version_id=version.id, learner_id=student1.id, mode="guided_practice")
         attempt2 = await service.create_attempt(session, task_version_id=version.id, learner_id=student2.id, mode="guided_practice")
+        session.add_all([
+            Snapshot(id="snapshot-1", attempt_id=attempt1.id, snapshot_ref="workspace://one", sequence=1),
+            Snapshot(id="snapshot-2", attempt_id=attempt2.id, snapshot_ref="workspace://two", sequence=1),
+        ])
+        await session.commit()
         return service, version, attempt1, attempt2
 
 
@@ -67,6 +73,7 @@ async def test_requirement_results_are_server_aggregated_and_client_flag_has_no_
         for definition in definitions:
             await service.upsert_requirement_result(
                 session, attempt=current, requirement_id=definition.id, status="SATISFIED",
+                snapshot_id="snapshot-1", operation_id=f"requirement:{definition.id}",
                 evaluator=definition.evaluator, evidence_refs=[f"evidence:{definition.id}"], version=1,
             )
         aggregate = await service.evaluator.evaluate(session, attempt_id=attempt.id)

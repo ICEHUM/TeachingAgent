@@ -1,0 +1,188 @@
+{
+  "verified_at": "2026-09-20T04:55:31.371982+00:00",
+  "process_a_pid": 38132,
+  "process_b_pid": 40216,
+  "attempt_id": "74dcd5ee-7f14-43bd-bea3-000cf622bce3",
+  "snapshot_id": "80b5b028-08d4-4c4f-86e5-6cb6792cf3a3",
+  "process_restart_recovered": true,
+  "checkpoint_present": true,
+  "security_probe": "passed",
+  "first_help_level": "L0",
+  "second_help_level": "L1",
+  "third_outcome": "teacher_interrupt",
+  "student_failure_count": 3,
+  "infrastructure_failure_count": 0,
+  "intervention": {
+    "id": "1ad00916-fbf6-4d75-b50c-f3551bdc304f",
+    "status": "WAITING_TEACHER",
+    "requested_state_version": 5
+  },
+  "requirement_results": [
+    {
+      "requirement_id": "ea9186b5-356b-4f0c-ae50-7f3fb42e6f94",
+      "snapshot_id": "80b5b028-08d4-4c4f-86e5-6cb6792cf3a3",
+      "operation_id": "tool:stage03-first-ac4308d502",
+      "status": "NOT_SATISFIED",
+      "evaluator": "openhands:run_faq_tests:v1",
+      "evidence_refs": [
+        "artifact://94054bc1acd6d55404a6c524/0a1a6de2bc8d35f511c8ee66fee77cd448320cd073f7656dbaa7a223e621e93d"
+      ],
+      "evaluated_at": "2026-09-20T04:54:47.166077+00:00",
+      "version": 1
+    },
+    {
+      "requirement_id": "ea9186b5-356b-4f0c-ae50-7f3fb42e6f94",
+      "snapshot_id": "80b5b028-08d4-4c4f-86e5-6cb6792cf3a3",
+      "operation_id": "tool:stage03-second-1ed2dd4d",
+      "status": "NOT_SATISFIED",
+      "evaluator": "openhands:run_faq_tests:v1",
+      "evidence_refs": [
+        "artifact://94054bc1acd6d55404a6c524/72bbd28b7559808c4cde3e34ec26165adb94341582c7f8ba1e2167f8f8333001"
+      ],
+      "evaluated_at": "2026-09-20T04:55:10.277061+00:00",
+      "version": 1
+    },
+    {
+      "requirement_id": "ea9186b5-356b-4f0c-ae50-7f3fb42e6f94",
+      "snapshot_id": "80b5b028-08d4-4c4f-86e5-6cb6792cf3a3",
+      "operation_id": "tool:stage03-third-1351731d",
+      "status": "NOT_SATISFIED",
+      "evaluator": "openhands:run_faq_tests:v1",
+      "evidence_refs": [
+        "artifact://94054bc1acd6d55404a6c524/cc46f8e029424896a9a9ff1fc8c6a77fc7ab5c5e70ac9ce7848e23b6510f67d4"
+      ],
+      "evaluated_at": "2026-09-20T04:55:17.086386+00:00",
+      "version": 1
+    }
+  ],
+  "timeline": [
+    {
+      "event_type": "run_tool",
+      "operation_id": "persist:stage03-first-ac4308d502",
+      "state_version": 1,
+      "decision": "execute_tool",
+      "help_level": "NONE",
+      "check_status": "student_failure"
+    },
+    {
+      "event_type": "request_guidance",
+      "operation_id": "persist:followup:stage03-first-ac4308d502",
+      "state_version": 2,
+      "decision": "generate_guidance",
+      "help_level": "L0",
+      "check_status": "student_failure"
+    },
+    {
+      "event_type": "run_tool",
+      "operation_id": "persist:stage03-second-1ed2dd4d",
+      "state_version": 3,
+      "decision": "execute_tool",
+      "help_level": "L0",
+      "check_status": "student_failure"
+    },
+    {
+      "event_type": "request_guidance",
+      "operation_id": "persist:followup:stage03-second-1ed2dd4d",
+      "state_version": 4,
+      "decision": "generate_guidance",
+      "help_level": "L1",
+      "check_status": "student_failure"
+    },
+    {
+      "event_type": "run_tool",
+      "operation_id": "persist:stage03-third-1351731d",
+      "state_version": 5,
+      "decision": "execute_tool",
+      "help_level": "L1",
+      "check_status": "student_failure"
+    }
+  ],
+  "snapshot_count": 1,
+  "tool_operation_count": 3,
+  "evidence_artifact_count": 3,
+  "container_security": {
+    "cap_drop": [
+      "ALL"
+    ],
+    "container_env_names": [
+      "ACP_NODE_DIR",
+      "CHROME_BIN",
+      "CHROMIUM_FLAGS",
+      "EDITOR",
+      "GIT_EDITOR",
+      "LANG",
+      "LC_ALL",
+      "LD_LIBRARY_PATH",
+      "LOG_JSON",
+      "OH_ACP_SKILL_SOURCING",
+      "OH_SESSION_API_KEYS_0",
+      "OPENHANDS_BUILD_GIT_REF",
+      "OPENHANDS_BUILD_GIT_SHA",
+      "OPENVSCODE_SERVER_ROOT",
+      "PATH",
+      "PUPPETEER_EXECUTABLE_PATH",
+      "PYTHONDONTWRITEBYTECODE",
+      "PYTHONUNBUFFERED",
+      "VISUAL"
+    ],
+    "docker_socket_mounted": false,
+    "memory_bytes": 1073741824,
+    "memory_swap_bytes": 1073741824,
+    "mounts": [
+      {
+        "destination": "/workspace/student",
+        "read_write": false,
+        "type": "bind"
+      }
+    ],
+    "nano_cpus": 1000000000,
+    "network_mode": "teachingagent-stage03-internal",
+    "pids_limit": 128,
+    "published_ports": [
+      "8000/tcp"
+    ],
+    "security_opt": [
+      "no-new-privileges:true"
+    ]
+  },
+  "timeout": {
+    "status": "infrastructure_failure",
+    "code": "execution_timeout"
+  },
+  "large_output": {
+    "status": "succeeded",
+    "stdout_truncated": true
+  },
+  "missing_workspace": {
+    "status": "infrastructure_failure",
+    "code": "workspace_start_failed"
+  },
+  "static_check": {
+    "attempt_id": "3c264d54-4ee9-43e8-8818-b470858cc271",
+    "snapshot_id": "0a359b72-6276-4b0c-ae58-c05165054092",
+    "tool": "inspect_workspace",
+    "tool_status": "succeeded",
+    "requirement_id": "898ab22d-f0ff-451e-a8d5-e69d7c6f74eb",
+    "requirement_status": "SATISFIED",
+    "operation_id": "tool:stage03-static-4453001b79",
+    "evidence_refs": [
+      "artifact://13b7c1ac8821c6f3352e0b3b/5f82a81f855040453e52f37f85791fb96947ce6a7be285f36e10909080f50923"
+    ],
+    "stage_requirements_met": false,
+    "stage_advanced": false,
+    "agent_container_user": "openhands",
+    "agent_cap_add": []
+  },
+  "real_idempotency": {
+    "operation_id": "tool:stage03-first-ac4308d502",
+    "duplicate": true,
+    "artifacts_before": 3,
+    "artifacts_after": 3
+  },
+  "timeout_graph": {
+    "attempt_id": "6f21c334-5a45-4220-b501-756a689fa673",
+    "check_status": "infrastructure_failure",
+    "student_failure_count": 0,
+    "infrastructure_failure_count": 1
+  }
+}

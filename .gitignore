@@ -11,4 +11,6 @@ __pycache__/
 .env.*
 !.env.example
 workspaces/runtime/
+workspaces/attempts/
+workspaces/evidence/
 .runtime/

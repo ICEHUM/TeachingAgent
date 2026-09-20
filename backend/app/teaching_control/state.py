@@ -163,8 +163,24 @@ DEFAULT_POLICY: TeachingPolicy = {
     "allow_answer_guidance": True,
     "allow_code_patch": False,
     "allow_auto_l2": False,
-    "allowed_tools": ["run_public_checks"],
-    "tool_capabilities": {"run_public_checks": "EVALUATION"},
+    "allowed_tools": [
+        "inspect_workspace",
+        "run_student_program",
+        "run_faq_tests",
+        "validate_retrieval",
+        "validate_citations",
+        "inspect_runtime_error",
+        "run_public_checks",
+    ],
+    "tool_capabilities": {
+        "inspect_workspace": "DIAGNOSTIC",
+        "run_student_program": "DIAGNOSTIC",
+        "run_faq_tests": "EVALUATION",
+        "validate_retrieval": "EVALUATION",
+        "validate_citations": "EVALUATION",
+        "inspect_runtime_error": "DIAGNOSTIC",
+        "run_public_checks": "EVALUATION",
+    },
     "assessment_allowed_capabilities": ["DIAGNOSTIC", "EVALUATION"],
 }
 

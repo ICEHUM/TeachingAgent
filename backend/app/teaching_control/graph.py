@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 from langgraph.graph import END, START, StateGraph
@@ -19,9 +19,11 @@ from .protocols import (
     InterventionStoreProtocol,
     OpenHandsExecutorProtocol,
     RequirementEvaluatorProtocol,
+    ResourcePolicy,
     TeachingEventStoreProtocol,
     TeachingLLMProtocol,
     ToolExecutionRequest,
+    ToolResultRecorderProtocol,
 )
 from .state import (
     AssessmentOutcome,
@@ -46,6 +48,9 @@ class TeachingGraphDependencies:
     event_store: TeachingEventStoreProtocol
     requirement_evaluator: RequirementEvaluatorProtocol
     intervention_store: InterventionStoreProtocol
+    result_recorder: ToolResultRecorderProtocol | None = None
+    resource_policy: ResourcePolicy = field(default_factory=ResourcePolicy)
+    tool_timeouts: dict[str, int] = field(default_factory=dict)
 
 
 def _bounded_operations(existing: list[str], operation_id: str) -> list[str]:
@@ -269,6 +274,27 @@ def decide_action(state: TeachingState) -> dict[str, object]:
                 },
                 "error_code": "TOOL_CAPABILITY_FORBIDDEN",
             }
+    # A newly requested, server-authorized tool always runs before reasoning about
+    # the previous check. This lets a learner submit an observation and retry.
+    if event["event_type"] == "run_tool":
+        if not requested_tool:
+            return {
+                "decision": {
+                    "kind": "reject",
+                    "reason": "Requested tool is not allowed by the effective teaching policy.",
+                    "guidance_kind": None,
+                    "tool_name": requested_tool,
+                },
+                "error_code": "TOOL_FORBIDDEN",
+            }
+        return {
+            "decision": {
+                "kind": "execute_tool",
+                "reason": f"Allowed deterministic tool requested at stage {stage}.",
+                "guidance_kind": None,
+                "tool_name": requested_tool,
+            }
+        }
     if state["latest_check_status"] == "infrastructure_failure":
         return {
             "decision": {
@@ -348,25 +374,6 @@ def decide_action(state: TeachingState) -> dict[str, object]:
                 "tool_name": None,
             },
         }
-    if event["event_type"] == "run_tool":
-        if not requested_tool:
-            return {
-                "decision": {
-                    "kind": "reject",
-                    "reason": "Requested tool is not allowed by the effective teaching policy.",
-                    "guidance_kind": None,
-                    "tool_name": requested_tool,
-                },
-                "error_code": "TOOL_FORBIDDEN",
-            }
-        return {
-            "decision": {
-                "kind": "execute_tool",
-                "reason": f"Allowed deterministic tool requested at stage {stage}.",
-                "guidance_kind": None,
-                "tool_name": requested_tool,
-            }
-        }
     return {
         "decision": {
             "kind": "persist_only",
@@ -425,14 +432,46 @@ def _execute_tool(
             stage=state["current_stage"],
             snapshot_id=snapshot_id,
             tool_name=cast(str, state["decision"]["tool_name"]),
+            tool_capability=state["effective_policy"]["tool_capabilities"][
+                cast(str, state["decision"]["tool_name"])
+            ],
+            timeout_seconds=dependencies.tool_timeouts.get(
+                cast(str, state["decision"]["tool_name"]), 30
+            ),
+            resource_policy=dependencies.resource_policy,
         )
     )
+    if result.operation_id != operation_id:
+        raise InvalidContextError("Tool result operation_id does not match its request.")
+    recorded_refs: tuple[str, ...] = ()
+    if dependencies.result_recorder is not None:
+        recorded_refs = dependencies.result_recorder.record(
+            ToolExecutionRequest(
+                operation_id=operation_id,
+                attempt_id=state["attempt_id"],
+                task_version=state["task_version"],
+                stage=state["current_stage"],
+                snapshot_id=snapshot_id,
+                tool_name=cast(str, state["decision"]["tool_name"]),
+                tool_capability=state["effective_policy"]["tool_capabilities"][
+                    cast(str, state["decision"]["tool_name"])
+                ],
+                timeout_seconds=dependencies.tool_timeouts.get(
+                    cast(str, state["decision"]["tool_name"]), 30
+                ),
+                resource_policy=dependencies.resource_policy,
+            ),
+            result,
+        )
+    evidence_refs = [item.artifact_refs[0].uri for item in result.evidence if item.artifact_refs]
     update: dict[str, object] = {
         "processed_operation_ids": _bounded_operations(
             state["processed_operation_ids"], operation_id
         ),
         "last_tool_result_ref": result.output_ref,
         "last_tool_status": result.status,
+        "evidence_refs": (evidence_refs or list(recorded_refs))[-MAX_EVIDENCE_REFS:],
+        "evidence_summary": result.summary[:MAX_EVIDENCE_SUMMARY],
     }
     if result.status == "infrastructure_failure":
         update.update(
@@ -444,6 +483,8 @@ def _execute_tool(
             latest_check_status="student_failure",
             student_failure_count=state["student_failure_count"] + 1,
         )
+    else:
+        update["latest_check_status"] = "passed"
     return update
 
 
@@ -550,6 +591,10 @@ def _persist_event(
             "evidence_refs": list(state["evidence_refs"]),
             "check_status": state["latest_check_status"],
             "help_level": state["help_level"],
+            "student_failure_count": state["student_failure_count"],
+            "infrastructure_failure_count": state["infrastructure_failure_count"],
+            "actor_id": event["actor_id"],
+            "actor_role": event["actor_role"],
         },
     )
     return {

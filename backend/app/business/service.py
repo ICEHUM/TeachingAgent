@@ -13,6 +13,7 @@ from .models import (
     OperationLedger,
     RequirementDefinition,
     RequirementResult,
+    Snapshot,
     Task,
     TaskStage,
     TaskVersion,
@@ -96,7 +97,18 @@ class BusinessService:
         session.add(attempt); await session.commit()
         return attempt
 
-    async def record_event(self, session: AsyncSession, *, attempt: Attempt, actor_id: str, operation_id: str, event_type: str, expected_state_version: int, payload: dict) -> tuple[TeachingEvent, bool]:
+    async def record_event(
+        self,
+        session: AsyncSession,
+        *,
+        attempt: Attempt,
+        actor_id: str | None,
+        operation_id: str,
+        event_type: str,
+        expected_state_version: int,
+        payload: dict,
+        trusted_attempt_updates: dict[str, object] | None = None,
+    ) -> tuple[TeachingEvent, bool]:
         existing = await session.scalar(select(TeachingEvent).where(
             TeachingEvent.attempt_id == attempt.id, TeachingEvent.operation_id == operation_id
         ))
@@ -107,9 +119,22 @@ class BusinessService:
         # Deliberately discard client-computed authority fields.
         clean_payload = {k: v for k, v in payload.items() if k not in {"stage_requirements_met", "formal_grade"}}
         new_version = expected_state_version + 1
-        result = await session.execute(update(Attempt).where(
-            Attempt.id == attempt.id, Attempt.state_version == expected_state_version
-        ).values(state_version=new_version))
+        values: dict[str, object] = {"state_version": new_version}
+        if trusted_attempt_updates:
+            allowed = {
+                "student_failure_count",
+                "infrastructure_failure_count",
+                "current_stage_id",
+                "status",
+            }
+            if not set(trusted_attempt_updates).issubset(allowed):
+                raise BusinessRuleError("invalid_trusted_attempt_update")
+            values.update(trusted_attempt_updates)
+        result = await session.execute(
+            update(Attempt)
+            .where(Attempt.id == attempt.id, Attempt.state_version == expected_state_version)
+            .values(**values)
+        )
         if result.rowcount != 1:
             raise BusinessRuleError("stale_state_version")
         event = TeachingEvent(attempt_id=attempt.id, actor_id=actor_id, event_type=event_type,
@@ -119,25 +144,110 @@ class BusinessService:
         session.add_all([event, ledger]); await session.commit(); await session.refresh(event)
         return event, False
 
-    async def upsert_requirement_result(self, session: AsyncSession, *, attempt: Attempt, requirement_id: str,
-                                        status: str, evaluator: str, evidence_refs: list[str], version: int) -> RequirementResult:
+    async def register_snapshot(
+        self,
+        session: AsyncSession,
+        *,
+        attempt: Attempt,
+        snapshot_id: str,
+        snapshot_ref: str,
+        sequence: int,
+    ) -> Snapshot:
+        existing = await session.get(Snapshot, snapshot_id)
+        if existing is not None:
+            if existing.attempt_id != attempt.id or existing.snapshot_ref != snapshot_ref:
+                raise BusinessRuleError("snapshot_identity_conflict")
+            return existing
+        latest_sequence = await session.scalar(
+            select(Snapshot.sequence)
+            .where(Snapshot.attempt_id == attempt.id)
+            .order_by(Snapshot.sequence.desc())
+            .limit(1)
+        )
+        if latest_sequence is not None and sequence <= latest_sequence:
+            raise BusinessRuleError("snapshot_sequence_not_monotonic")
+        snapshot = Snapshot(
+            id=snapshot_id,
+            attempt_id=attempt.id,
+            snapshot_ref=snapshot_ref,
+            sequence=sequence,
+        )
+        session.add(snapshot)
+        await session.commit()
+        await session.refresh(snapshot)
+        return snapshot
+
+    async def upsert_requirement_result(
+        self,
+        session: AsyncSession,
+        *,
+        attempt: Attempt,
+        requirement_id: str,
+        snapshot_id: str,
+        operation_id: str,
+        status: str,
+        evaluator: str,
+        evidence_refs: list[str],
+        version: int,
+    ) -> RequirementResult:
         definition = await session.get(RequirementDefinition, requirement_id)
         if definition is None or definition.version != version:
             raise BusinessRuleError("requirement_version_mismatch")
-        existing = await session.scalar(select(RequirementResult).where(
-            RequirementResult.attempt_id == attempt.id,
-            RequirementResult.requirement_id == requirement_id,
-            RequirementResult.version == version,
-        ))
-        if existing:
-            existing.status = status; existing.evaluator = evaluator; existing.evidence_refs = evidence_refs
-            existing.evaluated_at = datetime.now(UTC)
-            result = existing
-        else:
-            result = RequirementResult(attempt_id=attempt.id, requirement_id=requirement_id, status=status,
-                                       evaluator=evaluator, evidence_refs=evidence_refs, version=version)
-            session.add(result)
-        await session.commit(); await session.refresh(result); return result
+        if definition.task_stage_id != attempt.current_stage_id:
+            raise BusinessRuleError("requirement_stage_mismatch")
+        snapshot = await session.get(Snapshot, snapshot_id)
+        if snapshot is None or snapshot.attempt_id != attempt.id:
+            raise BusinessRuleError("snapshot_attempt_mismatch")
+        latest = await session.scalar(
+            select(Snapshot)
+            .where(Snapshot.attempt_id == attempt.id)
+            .order_by(Snapshot.sequence.desc())
+            .limit(1)
+        )
+        if latest is None or latest.id != snapshot_id:
+            raise BusinessRuleError("stale_snapshot")
+        ledger_scope = f"requirement:{attempt.id}"
+        ledger = await session.scalar(
+            select(OperationLedger).where(
+                OperationLedger.scope == ledger_scope,
+                OperationLedger.operation_id == operation_id,
+            )
+        )
+        if ledger is not None:
+            result_id = str(ledger.result_ref or "").removeprefix("requirement-result:")
+            result = await session.get(RequirementResult, result_id)
+            if result is None:
+                raise BusinessRuleError("requirement_ledger_corrupt")
+            return result
+        result = RequirementResult(
+            attempt_id=attempt.id,
+            requirement_id=requirement_id,
+            snapshot_id=snapshot_id,
+            operation_id=operation_id,
+            status=status,
+            evaluator=evaluator,
+            evidence_refs=evidence_refs,
+            version=version,
+            evaluated_at=datetime.now(UTC),
+        )
+        session.add(result)
+        await session.flush()
+        session.add(
+            OperationLedger(
+                scope=ledger_scope,
+                operation_id=operation_id,
+                status="COMPLETED",
+                result_ref=f"requirement-result:{result.id}",
+                result_payload={
+                    "snapshot_id": snapshot_id,
+                    "requirement_id": requirement_id,
+                    "status": result.status,
+                },
+            )
+        )
+        await session.commit()
+        await session.refresh(result)
+        return result
 
     async def create_intervention(self, session: AsyncSession, *, attempt: Attempt, operation_id: str,
                                   reason: str, evidence_refs: list[str]) -> tuple[Intervention, bool]:

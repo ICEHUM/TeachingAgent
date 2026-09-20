@@ -1,9 +1,48 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal, Protocol
 
-from .state import GuidanceKind, HelpLevel, TeachingMode
+from .state import GuidanceKind, HelpLevel, TeachingMode, ToolCapability
+
+
+@dataclass(frozen=True, slots=True)
+class ResourcePolicy:
+    """Server-owned limits copied into every auditable execution request."""
+
+    cpu_count: float = 1.0
+    memory_mb: int = 1024
+    pids_limit: int = 128
+    max_stdout_bytes: int = 16_384
+    max_stderr_bytes: int = 16_384
+    network_policy: Literal["internal_only"] = "internal_only"
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactRef:
+    uri: str
+    kind: Literal["evidence_manifest", "bounded_stdout", "bounded_stderr", "workspace_manifest"]
+    sha256: str
+    size_bytes: int
+    media_type: str = "application/json"
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceRecord:
+    evidence_id: str
+    attempt_id: str
+    task_version: str
+    snapshot_id: str
+    operation_id: str
+    tool_name: str
+    status: Literal["succeeded", "student_failure", "infrastructure_failure"]
+    code: str
+    summary: str
+    artifact_refs: tuple[ArtifactRef, ...]
+    observed_at: datetime
+    stdout_truncated: bool = False
+    stderr_truncated: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +53,9 @@ class ToolExecutionRequest:
     stage: str
     snapshot_id: str
     tool_name: str
+    tool_capability: ToolCapability
+    timeout_seconds: int
+    resource_policy: ResourcePolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +64,7 @@ class ToolExecutionResult:
     status: Literal["succeeded", "student_failure", "infrastructure_failure"]
     output_ref: str
     summary: str
+    evidence: tuple[EvidenceRecord, ...] = field(default_factory=tuple)
     duplicate: bool = False
 
 
@@ -71,6 +114,12 @@ class OpenHandsExecutorProtocol(Protocol):
     """Bounded execution contract; it cannot select teaching stages or help levels."""
 
     def execute(self, request: ToolExecutionRequest) -> ToolExecutionResult: ...
+
+
+class ToolResultRecorderProtocol(Protocol):
+    """Persists validated evidence and snapshot-bound requirement results."""
+
+    def record(self, request: ToolExecutionRequest, result: ToolExecutionResult) -> tuple[str, ...]: ...
 
 
 class TeachingLLMProtocol(Protocol):

@@ -1,9 +1,9 @@
 """Load the backend-only model credentials and create the OpenHands LLM."""
 from pathlib import Path
 
+from openhands.sdk import LLM
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from openhands.sdk import LLM
 
 
 def normalize_cache_usage(response):
@@ -42,15 +42,15 @@ def build_llm(**overrides):
     name = settings.llm_model
     if "/" not in name:
         name = f"{settings.llm_provider}/{name}"
-    options = dict(
-        model=name,
-        api_key=settings.llm_api_key,
-        base_url=settings.llm_base_url.rstrip("/"),
-        usage_id="teaching-agent",
-        timeout=60,
-        num_retries=2,
-        max_output_tokens=4096,
-        log_completions=False,
-    )
+    options = {
+        "model": name,
+        "api_key": settings.llm_api_key,
+        "base_url": settings.llm_base_url.rstrip("/"),
+        "usage_id": "teaching-agent",
+        "timeout": 60,
+        "num_retries": 2,
+        "max_output_tokens": 4096,
+        "log_completions": False,
+    }
     options.update(overrides)
     return TeachingLLM(**options)

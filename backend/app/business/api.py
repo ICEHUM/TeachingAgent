@@ -151,6 +151,7 @@ async def get_requirements(attempt_id: str, session: Annotated[AsyncSession, Dep
     aggregate = await service.evaluator.evaluate(session, attempt_id=attempt.id)
     return {"stage_satisfied": aggregate.satisfied, "results": [
         {"requirement_id": r.requirement_id, "status": r.status, "evaluator": r.evaluator,
+         "snapshot_id": r.snapshot_id, "operation_id": r.operation_id,
          "evidence_refs": r.evidence_refs, "evaluated_at": r.evaluated_at, "version": r.version}
         for r in results]}
 
