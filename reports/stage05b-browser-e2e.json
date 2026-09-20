@@ -1,0 +1,147 @@
+{
+  "attempt_id": "143cc20e-e2ac-4eac-aaf5-838696b50da6",
+  "submission_id": "0a578c24-4c14-482b-a40f-42378adbb338",
+  "snapshot_b": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+  "snapshot_c": "a097bfe4-4171-43a9-9a76-8ffba1101fe6",
+  "submission_frozen_to_b": true,
+  "browser_actions": [
+    "student_confirmed_submission",
+    "student_continued_to_snapshot_c",
+    "teacher_opened_review",
+    "teacher_confirmed_teacher_review_requirements",
+    "teacher_completed_four_rubric_items_with_reasons",
+    "teacher_published_formal_grade",
+    "student_opened_recap"
+  ],
+  "formal_grade": {
+    "total_score": 95,
+    "max_score": 100
+  },
+  "viewports": [
+    {
+      "page": "student-submit",
+      "viewport": [
+        1440,
+        900
+      ],
+      "scrollWidth": 1440,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-submit",
+      "viewport": [
+        1366,
+        768
+      ],
+      "scrollWidth": 1366,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-submit",
+      "viewport": [
+        1280,
+        800
+      ],
+      "scrollWidth": 1280,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-submit",
+      "viewport": [
+        390,
+        844
+      ],
+      "scrollWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-recap",
+      "viewport": [
+        1440,
+        900
+      ],
+      "has_three_lanes": true,
+      "snapshot_b": true,
+      "scrollWidth": 1440,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "teacher-review",
+      "viewport": [
+        1440,
+        900
+      ],
+      "snapshot_b": true,
+      "published_95": true,
+      "scrollWidth": 1440,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-recap",
+      "viewport": [
+        1366,
+        768
+      ],
+      "has_three_lanes": true,
+      "snapshot_b": true,
+      "scrollWidth": 1366,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "teacher-review",
+      "viewport": [
+        1366,
+        768
+      ],
+      "snapshot_b": true,
+      "published_95": true,
+      "scrollWidth": 1366,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-recap",
+      "viewport": [
+        1280,
+        800
+      ],
+      "has_three_lanes": true,
+      "snapshot_b": true,
+      "scrollWidth": 1280,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "teacher-review",
+      "viewport": [
+        1280,
+        800
+      ],
+      "snapshot_b": true,
+      "published_95": true,
+      "scrollWidth": 1280,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-recap",
+      "viewport": [
+        390,
+        844
+      ],
+      "has_three_lanes": true,
+      "snapshot_b": true,
+      "scrollWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "teacher-review",
+      "viewport": [
+        390,
+        844
+      ],
+      "snapshot_b": true,
+      "published_95": true,
+      "scrollWidth": 390,
+      "horizontalOverflow": false
+    }
+  ],
+  "passed": true
+}

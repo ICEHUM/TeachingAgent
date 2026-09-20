@@ -1,0 +1,176 @@
+{
+  "submission": {
+    "id": "0a578c24-4c14-482b-a40f-42378adbb338",
+    "attempt_id": "143cc20e-e2ac-4eac-aaf5-838696b50da6",
+    "snapshot_id": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+    "operation_id": "ui-submit:61c59a16-80eb-43ad-9f81-c3b5f9a0f541",
+    "sequence": 1,
+    "status": "submitted",
+    "created_at": "2026-09-20 16:12:42.144614+00:00",
+    "snapshot_sequence": 2
+  },
+  "expected_snapshot_b": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+  "latest_snapshot": {
+    "id": "a097bfe4-4171-43a9-9a76-8ffba1101fe6",
+    "sequence": 3,
+    "created_at": "2026-09-20 16:12:47.363170+00:00"
+  },
+  "expected_snapshot_c": "a097bfe4-4171-43a9-9a76-8ffba1101fe6",
+  "frozen_to_b_while_latest_is_c": true,
+  "review": {
+    "id": "89879b59-9180-426b-a42e-8067ae3ecc48",
+    "submission_id": "0a578c24-4c14-482b-a40f-42378adbb338",
+    "teacher_id": "d10924f3-b028-4823-936e-a9d3b784705c",
+    "status": "published",
+    "publish_operation_id": "ui-publish:42a0a731-625f-4000-b750-c8d4dcdf6014",
+    "published_at": "2026-09-20 16:12:49.839200+00:00"
+  },
+  "review_items": [
+    {
+      "rubric_key": "debug_explanation",
+      "auto_status": "SATISFIED",
+      "teacher_score": 25,
+      "teacher_reason": "依据提交 Snapshot B 的证据逐项确认，第 2 项。",
+      "teacher_confirmed": true
+    },
+    {
+      "rubric_key": "delivery_collab",
+      "auto_status": "NOT_RUN",
+      "teacher_score": 10,
+      "teacher_reason": "依据提交 Snapshot B 的证据逐项确认，第 4 项。",
+      "teacher_confirmed": true
+    },
+    {
+      "rubric_key": "function_boundary",
+      "auto_status": "SATISFIED",
+      "teacher_score": 40,
+      "teacher_reason": "依据提交 Snapshot B 的证据逐项确认，第 1 项。",
+      "teacher_confirmed": true
+    },
+    {
+      "rubric_key": "transfer_scheme",
+      "auto_status": "NOT_RUN",
+      "teacher_score": 20,
+      "teacher_reason": "依据提交 Snapshot B 的证据逐项确认，第 3 项。",
+      "teacher_confirmed": true
+    }
+  ],
+  "formal_grade": {
+    "id": "1cfe0234-fcb7-41da-bcb1-af3c516a4b96",
+    "submission_id": "0a578c24-4c14-482b-a40f-42378adbb338",
+    "review_id": "89879b59-9180-426b-a42e-8067ae3ecc48",
+    "total_score": 95,
+    "max_score": 100,
+    "published_by": "d10924f3-b028-4823-936e-a9d3b784705c",
+    "published_at": "2026-09-20 16:12:49.839200+00:00",
+    "change_reason": ""
+  },
+  "formal_grade_count": 1,
+  "snapshot_b_requirement_results": [
+    {
+      "requirement_key": "retrieval_public_tests",
+      "kind": "AUTO_TEST",
+      "snapshot_id": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+      "operation_id": "verify-b:retrieval_public_tests:fa05b2b5",
+      "status": "SATISFIED",
+      "evaluator": "openhands:run_faq_tests:v1",
+      "evidence_refs": [
+        "snapshot://c1edf46a-a6c7-404f-a8a0-044d46b8dac4"
+      ],
+      "evaluated_at": "2026-09-20 16:12:37.887615+00:00"
+    },
+    {
+      "requirement_key": "retrieval_observation",
+      "kind": "STUDENT_EXPLANATION",
+      "snapshot_id": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+      "operation_id": "verify-b:retrieval_observation:07ec9a51",
+      "status": "SATISFIED",
+      "evaluator": "server:student_explanation:v1",
+      "evidence_refs": [
+        "snapshot://c1edf46a-a6c7-404f-a8a0-044d46b8dac4"
+      ],
+      "evaluated_at": "2026-09-20 16:12:37.917227+00:00"
+    },
+    {
+      "requirement_key": "source_quality_review",
+      "kind": "TEACHER_REVIEW",
+      "snapshot_id": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+      "operation_id": "ui-teacher-review:ccffb854-467a-4b2e-897d-491d4bcad495",
+      "status": "SATISFIED",
+      "evaluator": "teacher_review_v1",
+      "evidence_refs": [
+        "teacher://d10924f3-b028-4823-936e-a9d3b784705c",
+        "submission://0a578c24-4c14-482b-a40f-42378adbb338"
+      ],
+      "evaluated_at": "2026-09-20 16:12:49.148665+00:00"
+    },
+    {
+      "requirement_key": "delivery_review",
+      "kind": "TEACHER_REVIEW",
+      "snapshot_id": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+      "operation_id": "ui-teacher-review:e7141fbd-985c-4278-9392-22b306146581",
+      "status": "SATISFIED",
+      "evaluator": "teacher_review_v1",
+      "evidence_refs": [
+        "teacher://d10924f3-b028-4823-936e-a9d3b784705c",
+        "submission://0a578c24-4c14-482b-a40f-42378adbb338"
+      ],
+      "evaluated_at": "2026-09-20 16:12:49.419996+00:00"
+    }
+  ],
+  "snapshot_c_requirement_results": [
+    {
+      "requirement_key": "retrieval_public_tests",
+      "kind": "AUTO_TEST",
+      "snapshot_id": "a097bfe4-4171-43a9-9a76-8ffba1101fe6",
+      "operation_id": "verify-c:retrieval_public_tests:25db8de9",
+      "status": "NOT_SATISFIED",
+      "evaluator": "openhands:run_faq_tests:v1",
+      "evidence_refs": [
+        "snapshot://a097bfe4-4171-43a9-9a76-8ffba1101fe6"
+      ],
+      "evaluated_at": "2026-09-20 16:12:47.589848+00:00"
+    },
+    {
+      "requirement_key": "retrieval_observation",
+      "kind": "STUDENT_EXPLANATION",
+      "snapshot_id": "a097bfe4-4171-43a9-9a76-8ffba1101fe6",
+      "operation_id": "verify-c:retrieval_observation:9d4855c6",
+      "status": "NOT_SATISFIED",
+      "evaluator": "openhands:run_faq_tests:v1",
+      "evidence_refs": [
+        "snapshot://a097bfe4-4171-43a9-9a76-8ffba1101fe6"
+      ],
+      "evaluated_at": "2026-09-20 16:12:47.619897+00:00"
+    }
+  ],
+  "teacher_review_results": [
+    {
+      "requirement_key": "source_quality_review",
+      "kind": "TEACHER_REVIEW",
+      "snapshot_id": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+      "operation_id": "ui-teacher-review:ccffb854-467a-4b2e-897d-491d4bcad495",
+      "status": "SATISFIED",
+      "evaluator": "teacher_review_v1",
+      "evidence_refs": [
+        "teacher://d10924f3-b028-4823-936e-a9d3b784705c",
+        "submission://0a578c24-4c14-482b-a40f-42378adbb338"
+      ],
+      "evaluated_at": "2026-09-20 16:12:49.148665+00:00"
+    },
+    {
+      "requirement_key": "delivery_review",
+      "kind": "TEACHER_REVIEW",
+      "snapshot_id": "c1edf46a-a6c7-404f-a8a0-044d46b8dac4",
+      "operation_id": "ui-teacher-review:e7141fbd-985c-4278-9392-22b306146581",
+      "status": "SATISFIED",
+      "evaluator": "teacher_review_v1",
+      "evidence_refs": [
+        "teacher://d10924f3-b028-4823-936e-a9d3b784705c",
+        "submission://0a578c24-4c14-482b-a40f-42378adbb338"
+      ],
+      "evaluated_at": "2026-09-20 16:12:49.419996+00:00"
+    }
+  ],
+  "passed": true
+}

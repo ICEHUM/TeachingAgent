@@ -30,6 +30,27 @@ FAQ_STAGES = (
     )),
 )
 
+FAQ_RUBRIC = (
+    ("function_boundary", "功能与边界测试", 40, (
+        "retrieval_public_tests",
+        "answer_public_tests",
+        "unknown_question_test",
+    )),
+    ("debug_explanation", "调试解释", 25, (
+        "explain_scope",
+        "retrieval_observation",
+    )),
+    ("transfer_scheme", "方案与迁移", 20, (
+        "citation_static_check",
+        "boundary_transfer",
+    )),
+    ("delivery_collab", "规范与协作", 15, (
+        "source_quality_review",
+        "delivery_static_check",
+        "delivery_review",
+    )),
+)
+
 DEFAULT_TASK_POLICY = {
     "failure_threshold": 3,
     "max_help_level": "L2",

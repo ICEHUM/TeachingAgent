@@ -25,21 +25,26 @@ from .models import (
     Attempt,
     Course,
     CourseMembership,
+    FormalGrade,
     Intervention,
     OperationLedger,
     RequirementDefinition,
     RequirementResult,
+    Review,
     Snapshot,
+    Submission,
     Task,
     TaskStage,
     TaskVersion,
     TeachingEvent,
     User,
 )
+from .reviews import ReviewService
 from .service import BusinessRuleError, BusinessService
 
 router = APIRouter(prefix="/api/product", tags=["stage05a-product"])
 service = BusinessService()
+reviews = ReviewService(service)
 
 REQUIREMENT_NAMES = {
     "explain_scope": "说明任务边界",
@@ -99,6 +104,40 @@ class TeacherAction(BaseModel):
     expected_state_version: int
     action: str
     teacher_prompt: str = Field(default="", max_length=1200)
+
+
+class SubmissionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: str = Field(min_length=8, max_length=160)
+    snapshot_id: str
+    explanation: str = Field(default="", max_length=2000)
+
+
+class ReviewDraftItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str
+    score: int | None = None
+    reason: str = Field(default="", max_length=800)
+    confirmed: bool = False
+
+
+class ReviewDraftSave(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[ReviewDraftItem]
+
+
+class ReviewPublish(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: str = Field(min_length=8, max_length=160)
+    change_reason: str = Field(default="", max_length=800)
+
+
+class TeacherRequirementReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: str = Field(min_length=8, max_length=160)
+    requirement_key: str
+    status: str
+    reason: str = Field(min_length=4, max_length=800)
 
 
 def _manager(request: Request) -> AttemptWorkspaceManager:
@@ -357,6 +396,29 @@ async def _workbench_view(
         ),
         "timeline": timeline,
         "agent_trace": trace[-12:],
+        "latest_submission": await _submission_summary(session, attempt_id=attempt.id),
+    }
+
+
+async def _submission_summary(session: AsyncSession, *, attempt_id: str) -> dict[str, Any] | None:
+    submission = await reviews.latest_submission(session, attempt_id=attempt_id)
+    if submission is None:
+        return None
+    snapshot = await session.get(Snapshot, submission.snapshot_id)
+    review = await session.scalar(select(Review).where(Review.submission_id == submission.id))
+    grade = await session.scalar(select(FormalGrade).where(FormalGrade.submission_id == submission.id))
+    return {
+        "id": submission.id,
+        "sequence": submission.sequence,
+        "snapshot_id": submission.snapshot_id,
+        "snapshot_label": _snapshot_label(snapshot),
+        "created_at": submission.created_at.isoformat(),
+        "review_status": review.status if review else "draft",
+        "formal_grade": None if grade is None else {
+            "total_score": grade.total_score,
+            "max_score": grade.max_score,
+            "published_at": grade.published_at.isoformat(),
+        },
     }
 
 
@@ -645,16 +707,33 @@ async def teacher_classroom(
         intervention = await session.scalar(select(Intervention).where(
             Intervention.attempt_id == attempt.id
         ).order_by(Intervention.created_at.desc()).limit(1))
-        category = "completed" if attempt.status == "completed" else (
-            "attention" if intervention and intervention.status in {"WAITING_TEACHER", "RESUME_FAILED"} else "progress"
-        )
-        wait_seconds = int((now - intervention.created_at).total_seconds()) if intervention and category == "attention" else 0
+        submission = await reviews.latest_submission(session, attempt_id=attempt.id)
+        grade = await session.scalar(select(FormalGrade).where(FormalGrade.submission_id == submission.id)) if submission else None
+        waiting = intervention and intervention.status in {"WAITING_TEACHER", "RESUME_FAILED"}
+        pending_review = submission is not None and grade is None
+        if attempt.status == "completed" or grade is not None:
+            category = "completed"
+        elif waiting or pending_review:
+            category = "attention"
+        else:
+            category = "progress"
+        reason = "正常学习中"
+        if waiting:
+            reason = intervention.reason
+        elif pending_review:
+            reason = "pending_review"
+        elif grade is not None:
+            reason = "grade_published"
+        wait_from = intervention.created_at if waiting else (submission.created_at if submission else None)
+        if wait_from is not None and wait_from.tzinfo is None:
+            wait_from = wait_from.replace(tzinfo=UTC)
+        wait_seconds = int((now - wait_from).total_seconds()) if category == "attention" and wait_from is not None else 0
         items.append({
             "attempt_id": attempt.id,
             "student": learner.display_name if learner else "未知学生",
             "stage": stage.title if stage else "未知阶段",
             "stage_key": stage.stage_key if stage else "",
-            "reason": intervention.reason if intervention else "正常学习中",
+            "reason": reason,
             "failure_count": attempt.student_failure_count,
             "help_level": next((
                 str((event.payload or {}).get("help_level"))
@@ -668,6 +747,8 @@ async def teacher_classroom(
             "intervention_status": intervention.status if intervention else None,
             "category": category,
             "ai_guidance_paused": attempt.ai_guidance_paused,
+            "submission_id": submission.id if submission else None,
+            "review_status": "published" if grade else ("draft" if submission else None),
         })
     return {
         "teacher": {"id": user.id, "display_name": user.display_name},
@@ -795,3 +876,252 @@ async def event_stream(
             await asyncio.sleep(1)
 
     return StreamingResponse(generate(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _product_fail(error: BusinessRuleError) -> HTTPException:
+    code = str(error)
+    messages = {
+        "student_submit_required": "只有该 Attempt 的学生可以提交作品",
+        "snapshot_attempt_mismatch": "Snapshot 不属于当前任务尝试",
+        "stale_snapshot": "提交必须绑定当前最新 Snapshot",
+        "review_already_published": "评价已发布，不能再覆盖草稿",
+        "unknown_rubric_item": "量规项不存在",
+        "formal_grade_not_writable": "正式成绩不能由请求体或 AI 建议写入",
+        "score_out_of_range": "分值超出该量规项上限",
+        "unconfirmed_rubric_item": "仍有量规项待评价，不能发布正式成绩",
+        "teacher_reason_required": "确认或改分必须填写理由",
+        "rubric_incomplete": "量规项尚未准备完成",
+        "teacher_review_required": "只有教师复核类验收项可以这样确认",
+        "invalid_review_status": "复核结果只能是已满足或未满足",
+        "teacher_role_required": "需要教师课程成员身份",
+        "object_access_denied": "无权访问该对象",
+    }
+    status = 403 if code in {
+        "student_submit_required", "teacher_role_required", "object_access_denied",
+        "formal_grade_not_writable", "teacher_review_required",
+    } else 409
+    return HTTPException(status, detail={"code": code, "message": messages.get(code, code)})
+
+
+async def _submission_for(session: AsyncSession, *, submission_id: str, user: User) -> tuple[Submission, Attempt]:
+    submission = await session.get(Submission, submission_id)
+    if submission is None:
+        raise HTTPException(404, "submission_not_found")
+    attempt = await _attempt(session, attempt_id=submission.attempt_id, user=user)
+    return submission, attempt
+
+
+def _snapshot_files(manager: AttemptWorkspaceManager, *, attempt_id: str, snapshot_id: str) -> list[dict[str, Any]]:
+    root = manager.snapshot_directory(attempt_id, snapshot_id)
+    files = []
+    if not root.exists():
+        return files
+    for path in sorted(item for item in root.rglob("*") if item.is_file() and not item.is_symlink()):
+        if path.suffix.lower() not in ALLOWED_FILE_SUFFIXES:
+            continue
+        files.append({"path": path.relative_to(root).as_posix(), "name": path.name, "size": path.stat().st_size})
+    return files
+
+
+@router.post("/attempts/{attempt_id}/submissions")
+async def create_submission(
+    attempt_id: str,
+    body: SubmissionCreate,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    try:
+        submission, duplicate = await reviews.create_submission(
+            session,
+            attempt=attempt,
+            user=user,
+            snapshot_id=body.snapshot_id,
+            operation_id=body.operation_id,
+            explanation=body.explanation,
+        )
+    except BusinessRuleError as exc:
+        raise _product_fail(exc) from exc
+    snapshot = await session.get(Snapshot, submission.snapshot_id)
+    return {
+        "id": submission.id,
+        "duplicate": duplicate,
+        "sequence": submission.sequence,
+        "snapshot_id": submission.snapshot_id,
+        "snapshot_label": _snapshot_label(snapshot),
+        "created_at": submission.created_at.isoformat(),
+    }
+
+
+@router.get("/attempts/{attempt_id}/submissions/latest")
+async def latest_submission_view(
+    attempt_id: str,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    submission = await reviews.latest_submission(session, attempt_id=attempt.id)
+    if submission is None:
+        latest = await _latest_snapshot(session, attempt.id)
+        if latest is None:
+            raise HTTPException(409, detail={"code": "snapshot_required", "message": "请先创建 Snapshot 再提交"})
+        preview = Submission(
+            id="",
+            attempt_id=attempt.id,
+            snapshot_id=latest.id,
+            operation_id="",
+            sequence=0,
+            status="preview",
+            explanation=attempt and "",
+            assistance=[],
+        )
+        preview.explanation = next((
+            str((event.payload or {}).get("student_observation"))
+            for event in reversed(list((await session.scalars(
+                select(TeachingEvent).where(TeachingEvent.attempt_id == attempt.id).order_by(TeachingEvent.created_at)
+            )).all()))
+            if (event.payload or {}).get("student_observation")
+        ), "")
+        view = await reviews.evaluation_view(session, submission=preview, teacher=None)
+        view["submission"]["id"] = None
+        view["submission"]["status"] = "preview"
+        view["files"] = _snapshot_files(_manager(request), attempt_id=attempt.id, snapshot_id=latest.id)
+        return view
+    view = await reviews.evaluation_view(
+        session,
+        submission=submission,
+        teacher=user if attempt.learner_id != user.id else None,
+    )
+    view["files"] = _snapshot_files(_manager(request), attempt_id=attempt.id, snapshot_id=submission.snapshot_id)
+    return view
+
+
+@router.get("/submissions/{submission_id}")
+async def submission_view(
+    submission_id: str,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    submission, attempt = await _submission_for(session, submission_id=submission_id, user=user)
+    view = await reviews.evaluation_view(
+        session,
+        submission=submission,
+        teacher=user if attempt.learner_id != user.id else None,
+    )
+    view["files"] = _snapshot_files(_manager(request), attempt_id=attempt.id, snapshot_id=submission.snapshot_id)
+    return view
+
+
+@router.get("/submissions/{submission_id}/files/{file_path:path}")
+async def read_submission_file(
+    submission_id: str,
+    file_path: str,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    submission, attempt = await _submission_for(session, submission_id=submission_id, user=user)
+    root = _manager(request).snapshot_directory(attempt.id, submission.snapshot_id)
+    path = _relative_file(root, file_path)
+    if not path.is_file():
+        raise HTTPException(404, "file_not_found")
+    content = path.read_text(encoding="utf-8")
+    return {"path": file_path, "content": content, "hash": _file_hash(content), "size": path.stat().st_size}
+
+
+@router.put("/teacher/reviews/{review_id}")
+async def save_review_draft(
+    review_id: str,
+    body: ReviewDraftSave,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    review = await session.get(Review, review_id)
+    if review is None:
+        raise HTTPException(404, "review_not_found")
+    submission = await session.get(Submission, review.submission_id)
+    attempt = await _attempt(session, attempt_id=submission.attempt_id, user=user)
+    if attempt.learner_id == user.id:
+        raise HTTPException(403, detail={"code": "teacher_role_required", "message": "学生不能填写正式评价"})
+    try:
+        saved = await reviews.save_draft(
+            session,
+            review=review,
+            teacher=user,
+            items=[item.model_dump() for item in body.items],
+        )
+    except BusinessRuleError as exc:
+        raise _product_fail(exc) from exc
+    view = await reviews.evaluation_view(session, submission=submission, teacher=user)
+    view["review"]["id"] = saved.id
+    return view
+
+
+@router.post("/teacher/reviews/{review_id}/publish")
+async def publish_review(
+    review_id: str,
+    body: ReviewPublish,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    review = await session.get(Review, review_id)
+    if review is None:
+        raise HTTPException(404, "review_not_found")
+    submission = await session.get(Submission, review.submission_id)
+    attempt = await _attempt(session, attempt_id=submission.attempt_id, user=user)
+    if attempt.learner_id == user.id:
+        raise HTTPException(403, detail={"code": "teacher_role_required", "message": "学生不能发布正式成绩"})
+    try:
+        grade = await reviews.publish(
+            session,
+            review=review,
+            teacher=user,
+            operation_id=body.operation_id,
+            change_reason=body.change_reason,
+        )
+    except BusinessRuleError as exc:
+        raise _product_fail(exc) from exc
+    return {
+        "submission_id": submission.id,
+        "review_id": review.id,
+        "formal_grade": {
+            "total_score": grade.total_score,
+            "max_score": grade.max_score,
+            "published_at": grade.published_at.isoformat(),
+            "published_by": user.display_name,
+        },
+    }
+
+
+@router.post("/teacher/submissions/{submission_id}/requirement-reviews")
+async def teacher_requirement_review(
+    submission_id: str,
+    body: TeacherRequirementReview,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    submission, attempt = await _submission_for(session, submission_id=submission_id, user=user)
+    if attempt.learner_id == user.id:
+        raise HTTPException(403, detail={"code": "teacher_role_required", "message": "学生不能确认教师复核项"})
+    try:
+        result = await reviews.record_teacher_requirement(
+            session,
+            attempt=attempt,
+            submission=submission,
+            teacher=user,
+            requirement_key=body.requirement_key,
+            status=body.status,
+            operation_id=body.operation_id,
+            reason=body.reason,
+        )
+    except BusinessRuleError as exc:
+        raise _product_fail(exc) from exc
+    return {
+        "requirement_key": body.requirement_key,
+        "status": result.status,
+        "snapshot_id": result.snapshot_id,
+        "evaluator": result.evaluator,
+        "operation_id": result.operation_id,
+    }

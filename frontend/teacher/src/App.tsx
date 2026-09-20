@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, api, newOperation } from "./api";
-import type { Classroom, ClassroomItem, Detail } from "./types";
+import { ReviewView } from "./ReviewView";
+import type { Classroom, ClassroomItem, Detail, Evidence } from "./types";
 
 type GroupKey = "attention" | "progress" | "completed";
 const groupNames: Record<GroupKey, string> = { attention: "需要关注", progress: "进行中", completed: "已完成" };
-const reasonNames: Record<string, string> = { failure_threshold_reached: "连续检查未通过", l2_authorization_required: "需要授权局部示例", normal: "正常学习中" };
+const reasonNames: Record<string, string> = { failure_threshold_reached: "连续检查未通过", l2_authorization_required: "需要授权局部示例", pending_review: "提交待复核", grade_published: "成绩已发布", normal: "正常学习中" };
 const helpNames: Record<string, string> = { L0: "引导", L1: "定位", L2: "局部示例", NONE: "尚未指导" };
 const requirementStatus = (value: string) => ({ SATISFIED: "已满足", NOT_SATISFIED: "未满足", INFRASTRUCTURE_ERROR: "环境异常", NOT_RUN: "未运行" }[value] || value);
 const time = (value: string) => new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
@@ -25,10 +26,13 @@ export function App() {
   const [actionError, setActionError] = useState("");
   const [showTrace, setShowTrace] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [reviewId, setReviewId] = useState<string | null>(null);
   const [connection, setConnection] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const selectedRef = useRef<string | null>(null);
   const selectionInitialized = useRef(false);
+  const detailPanelRef = useRef<HTMLElement | null>(null);
+  const studentTriggerRef = useRef<HTMLElement | null>(null);
 
   const loadClassroom = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
@@ -57,8 +61,14 @@ export function App() {
   useEffect(() => { void loadClassroom(); }, [loadClassroom]);
   useEffect(() => { if (selected) void loadDetail(selected); }, [loadDetail, selected]);
   useEffect(() => {
-    if (!detailOpen) return;
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setDetailOpen(false); };
+    if (!detailOpen || !matchMedia("(max-width: 1050px)").matches) return;
+    const panel = detailPanelRef.current;
+    const focusable = () => panel ? Array.from(panel.querySelectorAll<HTMLElement>('button:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])')) : [];
+    requestAnimationFrame(() => focusable()[0]?.focus());
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setDetailOpen(false); requestAnimationFrame(() => studentTriggerRef.current?.focus()); return; }
+      if (event.key === "Tab") { const items = focusable(); if (!items.length) return; const first = items[0]; const last = items[items.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
+    };
     addEventListener("keydown", close);
     return () => removeEventListener("keydown", close);
   }, [detailOpen]);
@@ -78,7 +88,8 @@ export function App() {
     setDetailOpen(false);
   }
 
-  function chooseStudent(attemptId: string) {
+  function chooseStudent(attemptId: string, trigger: HTMLElement) {
+    studentTriggerRef.current = trigger;
     selectedRef.current = attemptId;
     setSelected(attemptId);
     setDetailOpen(true);
@@ -103,6 +114,7 @@ export function App() {
   if (!userId) return <Setup />;
   if (loading) return <Loading />;
   if (error || !classroom) return <Fatal message={error || "课堂工作台不可用"} retry={() => { setLoading(true); void loadClassroom(); }} />;
+  if (reviewId) return <div className="teacher-app"><header className="topbar"><div className="brand"><span className="brand-mark">AI</span><strong>教师课堂台</strong></div></header><ReviewView userId={userId} submissionId={reviewId} onBack={() => { setReviewId(null); void loadClassroom(); }} /></div>;
   const currentList = classroom.groups[group];
   const groupTitle = group === "attention" ? "现在谁需要教师帮助" : group === "progress" ? "跟进正在学习的学生" : "查看已完成的学习记录";
 
@@ -114,45 +126,66 @@ export function App() {
     </header>
     <main className="teacher-layout">
       <section className="classroom-list" aria-label="课堂学生列表">
-        <header className="list-head"><div className="list-head-copy"><span className="eyebrow">课堂工作台</span><h1>{groupTitle}</h1><p>依据真实教学事件，每 5 秒自动同步。</p></div><div className="classroom-overview" aria-label="课堂状态概览"><span className={classroom.groups.attention.length ? "needs-attention" : ""}><b>{classroom.groups.attention.length}</b><small>待介入</small></span><span><b>{classroom.groups.progress.length}</b><small>学习中</small></span><span><b>{classroom.groups.completed.length}</b><small>已完成</small></span></div><button className="refresh" onClick={() => void loadClassroom()}>刷新数据</button></header>
+        <header className="list-head"><div className="list-head-copy"><h1>{groupTitle}</h1><p>按介入优先级组织课堂事实，每 5 秒同步一次。</p></div><div className="classroom-overview" aria-label="课堂状态概览"><span className={classroom.groups.attention.length ? "needs-attention" : ""}><b>{classroom.groups.attention.length}</b><small>待介入</small></span><span><b>{classroom.groups.progress.length}</b><small>学习中</small></span><span><b>{classroom.groups.completed.length}</b><small>已完成</small></span></div><button className="refresh" onClick={() => void loadClassroom()}>刷新数据</button></header>
         <nav className="group-tabs" aria-label="学生状态分组">{(Object.keys(groupNames) as GroupKey[]).map((key) => <button key={key} aria-current={group === key} onClick={() => chooseGroup(key)}><span>{groupNames[key]}</span><b>{classroom.groups[key].length}</b></button>)}</nav>
-        <div className="list-columns"><span>学生 / 当前阶段</span><span>原因</span><span>失败</span><span>已有帮助</span><span>等待</span></div>
-        <div className="student-list">{currentList.length ? currentList.map((item) => <StudentRow key={item.attempt_id} item={item} selected={selected === item.attempt_id} onSelect={() => chooseStudent(item.attempt_id)} />) : <EmptyGroup group={group} />}</div>
+        <div className="student-list">{currentList.length ? currentList.map((item) => <StudentRow key={item.attempt_id} item={item} selected={selected === item.attempt_id} onSelect={(trigger) => chooseStudent(item.attempt_id, trigger)} />) : <EmptyGroup group={group} />}</div>
       </section>
       {detailOpen && <button className="detail-backdrop" aria-label="返回学生列表" onClick={() => setDetailOpen(false)} />}
-      <aside className={`intervention-panel ${detailOpen ? "open" : ""}`} aria-label="教师介入详情">
-        {!selected ? <EmptyDetail /> : detailLoading || !detail ? <DetailLoading /> : <InterventionDetail key={detail.attempt.id} detail={detail} prompt={prompt} setPrompt={setPrompt} actionLoading={actionLoading} actionError={actionError} takeAction={takeAction} showTrace={showTrace} setShowTrace={setShowTrace} onClose={() => setDetailOpen(false)} />}
+      <aside ref={detailPanelRef} className={`intervention-panel ${detailOpen ? "open" : ""}`} role={detailOpen ? "dialog" : undefined} aria-modal={detailOpen ? "true" : undefined} aria-label="教师介入详情">
+        {!selected ? <EmptyDetail /> : detailLoading || !detail ? <DetailLoading /> : <InterventionDetail key={detail.attempt.id} detail={detail} prompt={prompt} setPrompt={setPrompt} actionLoading={actionLoading} actionError={actionError} takeAction={takeAction} showTrace={showTrace} setShowTrace={setShowTrace} onClose={() => { setDetailOpen(false); requestAnimationFrame(() => studentTriggerRef.current?.focus()); }} userId={userId} onReview={(id) => setReviewId(id)} />}
       </aside>
     </main>
   </div>;
 }
 
-function StudentRow({ item, selected, onSelect }: { item: ClassroomItem; selected: boolean; onSelect: () => void }) {
+function StudentRow({ item, selected, onSelect }: { item: ClassroomItem; selected: boolean; onSelect: (trigger: HTMLElement) => void }) {
   const attention = item.category === "attention";
-  return <button className={`student-row ${selected ? "selected" : ""}`} onClick={onSelect} aria-pressed={selected}>
-    <span className="student-cell"><i className={attention ? "attention-dot" : "status-dot"}/><span><b>{item.student}</b><small>{item.stage}</small></span></span>
-    <span><b className="reason">{reasonNames[item.reason] || item.reason}</b>{item.intervention_status === "RESUME_FAILED" && <small className="danger">恢复失败，可重试</small>}</span>
-    <span className={item.failure_count >= 3 ? "failure danger" : "failure"}>{item.failure_count} 次</span>
-    <span>{helpNames[item.help_level] || item.help_level}</span>
-    <span>{attention ? waitText(item.wait_seconds) : "—"}</span>
+  const status = item.intervention_status === "RESUME_FAILED" ? "恢复失败" : attention ? "等待教师" : item.category === "completed" ? "已完成" : "学习中";
+  return <button className={`student-row ${selected ? "selected" : ""} ${attention ? "needs-attention" : ""}`} onClick={(event) => onSelect(event.currentTarget)} aria-pressed={selected}>
+    <span className="student-identity"><span className="student-avatar" aria-hidden="true">{item.student.slice(0, 1)}</span><span><b>{item.student}</b><small>{item.stage}</small></span></span>
+    <span className="student-need"><small>当前情况</small><b>{reasonNames[item.reason] || item.reason}</b>{item.intervention_status === "RESUME_FAILED" && <em>教师操作已保留，可安全重试</em>}</span>
+    <span className="student-signals"><span className={item.failure_count >= 3 ? "danger" : ""}><b>{item.failure_count}</b><small>失败</small></span><span><b>{helpNames[item.help_level] || item.help_level}</b><small>已有帮助</small></span><span><b>{attention ? waitText(item.wait_seconds) : "当前"}</b><small>{attention ? "等待" : "状态"}</small></span></span>
+    <span className={`status-badge row-status ${item.intervention_status === "RESUME_FAILED" ? "failed" : attention ? "waiting" : item.category === "completed" ? "completed" : "progress"}`}>{status}</span><span className="row-chevron" aria-hidden="true">›</span>
   </button>;
 }
 
-function InterventionDetail({ detail, prompt, setPrompt, actionLoading, actionError, takeAction, showTrace, setShowTrace, onClose }: { detail: Detail; prompt: string; setPrompt: (value: string) => void; actionLoading: string; actionError: string; takeAction: (action: "continue" | "allow_l2" | "pause_ai" | "resume") => void; showTrace: boolean; setShowTrace: (value: boolean) => void; onClose: () => void }) {
+function InterventionDetail({ detail, prompt, setPrompt, actionLoading, actionError, takeAction, showTrace, setShowTrace, onClose, userId, onReview }: { detail: Detail; prompt: string; setPrompt: (value: string) => void; actionLoading: string; actionError: string; takeAction: (action: "continue" | "allow_l2" | "pause_ai" | "resume") => void; showTrace: boolean; setShowTrace: (value: boolean) => void; onClose: () => void; userId: string; onReview: (submissionId: string) => void }) {
   const active = detail.interventions.find((item) => ["WAITING_TEACHER", "RESUME_FAILED"].includes(item.status));
-  const currentRequirement = detail.requirements.find((item) => item.status === "NOT_SATISFIED") || detail.requirements[0];
+  const hasResolved = detail.interventions.some((item) => item.status === "RESOLVED");
+  const statusTone = active?.status === "RESUME_FAILED" ? "failed" : active ? "waiting" : detail.attempt.status === "COMPLETED" ? "completed" : hasResolved ? "resolved" : "progress";
+  const statusText = active?.status === "RESUME_FAILED" ? "恢复失败" : active ? "等待处理" : detail.attempt.status === "COMPLETED" ? "已完成" : hasResolved ? "流程已恢复" : "学习中";
+  const [tab, setTab] = useState<"overview" | "evidence" | "trace">(showTrace ? "trace" : "overview");
+  const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState("");
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const interventionBasis = detail.requirements.find((item) => item.status === "NOT_SATISFIED") || detail.requirements[0];
+  async function openEvidence(operationId: string | null) {
+    if (!operationId) return;
+    setEvidenceLoading(operationId);
+    try { setSelectedEvidence(await api<Evidence>(`/api/product/attempts/${detail.attempt.id}/evidence/${encodeURIComponent(operationId)}`, userId)); }
+    catch { setSelectedEvidence(null); }
+    finally { setEvidenceLoading(""); }
+  }
+  function chooseTab(next: "overview" | "evidence" | "trace") { setTab(next); if (next === "trace") setShowTrace(true); }
   return <>
-    <header className="detail-head"><button className="detail-back" onClick={onClose} aria-label="返回学生列表">返回</button><div><span className="eyebrow">学生学习详情</span><h2>{detail.identity.display_name}</h2><p>{detail.stage.title} · {detail.requirement_summary.satisfied_count}/{detail.requirement_summary.required_count} 项满足</p></div><span className={`intervention-status ${active ? "waiting" : "resolved"}`}>{active ? active.status === "RESUME_FAILED" ? "恢复失败" : "等待处理" : "当前无需介入"}</span></header>
+    <header className="detail-head"><button className="detail-back" onClick={onClose} aria-label="返回学生列表">返回</button><span className="detail-avatar" aria-hidden="true">{detail.identity.display_name.slice(0, 1)}</span><div><h2>{detail.identity.display_name}</h2><p>{detail.stage.title} · 阶段 {detail.stage.position + 1}/{detail.stage.total}</p></div>{detail.latest_submission && <button className="refresh" onClick={() => onReview(detail.latest_submission!.id)}>{detail.latest_submission.formal_grade ? "查看评价" : "评价作品"}</button>}<span className={`status-badge intervention-status ${statusTone}`}>{statusText}</span></header>
+    <nav className="detail-tabs" aria-label="学生详情分组"><button aria-current={tab === "overview"} onClick={() => chooseTab("overview")}>概览</button><button aria-current={tab === "evidence"} onClick={() => chooseTab("evidence")}>证据 <span>{detail.requirement_summary.satisfied_count}/{detail.requirement_summary.required_count}</span></button><button aria-current={tab === "trace"} onClick={() => chooseTab("trace")}>轨迹 <span>{detail.timeline.length}</span></button></nav>
     <div className="detail-content">
       <div className="detail-scroll">
-        <section className="detail-section"><h3>当前验收项</h3>{currentRequirement ? <div className="requirement-focus"><div><b>{currentRequirement.name}</b><span>{currentRequirement.snapshot_label || "尚未运行"}</span></div><strong className={currentRequirement.status === "SATISFIED" ? "success" : "danger"}>{requirementStatus(currentRequirement.status)}</strong><dl><div><dt>检查器</dt><dd>{currentRequirement.evaluator}</dd></div><div><dt>证据</dt><dd>{currentRequirement.evidence_refs.length ? `${currentRequirement.evidence_refs.length} 条可追溯证据` : "尚无证据"}</dd></div></dl></div> : <p className="muted">当前阶段没有验收项。</p>}</section>
-        <section className="detail-section"><h3>学生观察</h3><blockquote>{detail.student_observation || "学生尚未提交有效观察。"}</blockquote></section>
-        <details className="detail-disclosure" open><summary><span>最近指导</span><small>{detail.guidance_history.length} 条记录</small></summary><div className="disclosure-body guidance-history">{detail.guidance_history.length ? detail.guidance_history.slice(-3).reverse().map((item, index) => <article key={`${item.time}-${index}`}><header><b>{helpNames[item.level || ""] || "引导"}</b><time>{time(item.time)}</time></header><p>{item.message}</p>{item.success === false && <small>已使用安全模板：{item.fallback_reason}</small>}</article>) : <p className="muted">尚无智能指导记录。</p>}</div></details>
-        <details className="detail-disclosure"><summary><span>版本变化</span><small>{detail.snapshot_diff.files_changed} 个文件</small></summary><div className="disclosure-body"><div className="diff-summary"><div><span>{detail.snapshot_diff.from || "—"}</span><b>→</b><span>{detail.snapshot_diff.to || "—"}</span></div><p>{detail.snapshot_diff.files_changed} 个文件变化 · <strong>+{detail.snapshot_diff.additions}</strong> / <em>−{detail.snapshot_diff.deletions}</em></p>{detail.snapshot_diff.files?.length ? <small>{detail.snapshot_diff.files.join("、")}</small> : null}</div></div></details>
-        <details className="detail-disclosure"><summary><span>教学过程</span><small>{detail.timeline.length} 个事件</small></summary><div className="disclosure-body teaching-timeline"><ol>{detail.timeline.length ? detail.timeline.slice(-10).map((item) => <li key={`${item.state_version}-${item.time}`}><time>{time(item.time)}</time><i/><span>{item.label}</span></li>) : <li className="empty-line">尚无可解释业务事件</li>}</ol></div></details>
-        <details className="detail-disclosure" open={showTrace} onToggle={(event) => setShowTrace(event.currentTarget.open)}><summary><span>智能体运行轨迹</span><small>教师授权可见</small></summary><div className="disclosure-body agent-trace">{detail.agent_trace.length ? detail.agent_trace.map((item, index) => <div key={`${item.kind}-${index}`}><span>{index + 1}</span><p><b>{item.label}</b><small>{item.detail}</small></p></div>) : <p className="muted">还没有可转换的真实运行事件。</p>}</div></details>
+        {tab === "overview" && <div className="detail-tab-panel overview-panel"><section className="learning-summary"><div><span>当前阶段</span><h3>{detail.stage.title}</h3><p>{detail.stage.objective}</p></div><div className="requirement-meter"><b>{detail.requirement_summary.satisfied_count}<small> / {detail.requirement_summary.required_count}</small></b><span>验收项已满足</span></div></section><section className="detail-section"><div className="section-heading"><h3>学生观察</h3><span>最近一次提交</span></div><blockquote>{detail.student_observation || "学生尚未提交有效观察。"}</blockquote></section><section className="detail-section"><div className="section-heading"><h3>最近指导</h3><span>{detail.guidance_history.length} 条记录</span></div><div className="guidance-history">{detail.guidance_history.length ? detail.guidance_history.slice(-2).reverse().map((item, index) => <article key={`${item.time}-${index}`}><header><b>{helpNames[item.level || ""] || "引导"}</b><time>{time(item.time)}</time></header><p>{item.message}</p>{item.success === false && <small>已使用安全模板：{item.fallback_reason}</small>}</article>) : <p className="muted">尚无智能指导记录。</p>}</div></section><section className="detail-section"><div className="section-heading"><h3>Snapshot 变化</h3><span>{detail.snapshot_diff.files_changed} 个文件</span></div><div className="diff-summary"><div><span>{detail.snapshot_diff.from || "尚无前序版本"}</span><b>→</b><span>{detail.snapshot_diff.to || "当前版本"}</span></div><p>{detail.snapshot_diff.files_changed} 个文件变化 · <strong>+{detail.snapshot_diff.additions}</strong> / <em>−{detail.snapshot_diff.deletions}</em></p>{detail.snapshot_diff.files?.length ? <small>{detail.snapshot_diff.files.join("、")}</small> : null}</div></section></div>}
+        {tab === "evidence" && <div className="detail-tab-panel evidence-panel"><div className="panel-intro"><h3>当前阶段验收证据</h3><p>先阅读教学结论，再决定介入方式。</p></div><div className="teacher-requirements">{detail.requirements.map((item) => <button type="button" key={item.id} className={item.status.toLowerCase()} disabled={!item.operation_id || !!evidenceLoading} onClick={() => void openEvidence(item.operation_id)}><span className="requirement-state" aria-hidden="true">{item.status === "SATISFIED" ? "✓" : item.status === "NOT_SATISFIED" ? "×" : "·"}</span><div><h4>{item.name}</h4><p>{item.snapshot_label || "尚未运行"} · {item.evaluator}</p><small>{evidenceLoading === item.operation_id ? "正在读取证据…" : item.evidence_refs.length ? `${item.evidence_refs.length} 条证据 · 点击查看` : "尚无证据"}</small></div><b>{requirementStatus(item.status)}</b></button>)}</div>{selectedEvidence && <section className={`teacher-evidence-detail ${selectedEvidence.status === "SATISFIED" ? "passed" : "failed"}`}><header><div><span>教学结论</span><h4>{selectedEvidence.status === "SATISFIED" ? "当前要求已满足" : "当前要求尚未满足"}</h4></div><b>{selectedEvidence.snapshot}</b></header><p>{selectedEvidence.reason_code === "empty_retrieval" ? "检索流程已经运行，但已知问题没有返回可用结果。请结合学生观察判断下一步指导。" : "该结论来自当前版本的真实运行证据，可继续查看技术追溯。"}</p><dl><div><dt>检查工具</dt><dd>{selectedEvidence.tool}</dd></div><div><dt>失败原因</dt><dd>{selectedEvidence.reason_code}</dd></div><div><dt>运行时间</dt><dd>{new Date(selectedEvidence.observed_at).toLocaleString("zh-CN")}</dd></div></dl><details><summary>查看有界输出与运行标识</summary><pre>{selectedEvidence.stdout_summary || "无可展示输出"}</pre><code>{selectedEvidence.operation}</code></details></section>}</div>}
+        {tab === "trace" && <div className="detail-tab-panel trace-panel"><section className="detail-section"><div className="section-heading"><h3>教学过程</h3><span>{detail.timeline.length} 个事件</span></div><div className="teaching-timeline"><ol>{detail.timeline.length ? detail.timeline.slice(-10).map((item) => <li key={`${item.state_version}-${item.time}`}><time>{time(item.time)}</time><i/><span>{item.label}</span></li>) : <li className="empty-line">尚无可解释业务事件</li>}</ol></div></section><section className="detail-section"><div className="section-heading"><h3>智能体运行轨迹</h3><span>教师授权可见</span></div><div className="agent-trace">{detail.agent_trace.length ? detail.agent_trace.map((item, index) => <div key={`${item.kind}-${index}`}><span>{index + 1}</span><p><b>{item.label}</b><small>{item.detail}</small></p></div>) : <p className="muted">还没有可转换的真实运行事件。</p>}</div></section></div>}
       </div>
-      <section className="teacher-actions action-dock"><div className="action-heading"><div><h3>教师操作</h3><p>{active ? "根据证据选择最小必要干预。" : "当前学生没有待处理介入事项。"}</p></div>{active && <span>待处理</span>}</div><label htmlFor="teacher-prompt">补充教学提示（可选）</label><textarea id="teacher-prompt" rows={2} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="给出检查方向，不直接提供完整答案。" disabled={!active}/>{actionError && <div className="action-error" role="alert">{actionError}</div>}<div className="action-grid"><button onClick={() => takeAction("continue")} disabled={!active || !!actionLoading}>{actionLoading === "continue" ? "处理中…" : "保持当前指导"}</button><button onClick={() => takeAction("allow_l2")} disabled={!active || !!actionLoading}>{actionLoading === "allow_l2" ? "处理中…" : "允许局部示例"}</button><button onClick={() => takeAction("pause_ai")} disabled={!active || !!actionLoading}>{actionLoading === "pause_ai" ? "处理中…" : "暂停智能指导"}</button><button className="primary" onClick={() => takeAction("resume")} disabled={!active || !!actionLoading}>{actionLoading === "resume" ? "正在恢复…" : "确认并恢复流程"}</button></div></section>
+      <section className={`teacher-actions action-dock ${actionsOpen ? "expanded" : "collapsed"}`}>
+        <button type="button" className="action-toggle" aria-expanded={actionsOpen} onClick={() => setActionsOpen((value) => !value)}><span><b>介入操作</b><small>{active ? "待教师处理" : "当前无需操作"}</small></span><span>{actionsOpen ? "收起" : "展开"}</span></button>
+        <div className="action-body">
+          {active && interventionBasis && <section className="action-basis" aria-label="本次介入依据"><div><span>本次介入依据</span><b>{interventionBasis.name}</b></div><p><strong>{requirementStatus(interventionBasis.status)}</strong><span>{interventionBasis.snapshot_label || "尚未运行"}</span><small>{interventionBasis.evaluator}</small></p></section>}
+          <section className="action-explanation"><div className="action-section-heading"><div><h3>教师介入说明</h3><p>{active ? "依据当前证据选择最小必要干预。" : "当前没有待处理的介入事项。"}</p></div>{active && <span className="status-badge waiting">待处理</span>}</div><label htmlFor="teacher-prompt">补充教学提示（可选）</label><textarea id="teacher-prompt" rows={2} value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="给出检查方向，不直接提供完整答案。" disabled={!active}/>{actionError && <div className="action-error" role="alert">{actionError}</div>}</section>
+          <section className="action-group strategy-group"><div className="action-section-heading"><div><h3>指导策略</h3><p>控制本轮帮助边界</p></div></div><div className="action-grid strategy"><button onClick={() => takeAction("continue")} disabled={!active || !!actionLoading}>{actionLoading === "continue" ? "处理中…" : "保持当前指导"}</button><button onClick={() => takeAction("allow_l2")} disabled={!active || !!actionLoading}>{actionLoading === "allow_l2" ? "处理中…" : "允许局部示例"}</button></div></section>
+          <section className="action-group flow-control"><div className="action-section-heading"><div><h3>流程控制</h3><p>暂停或恢复教学流程</p></div></div><div className="action-grid"><button onClick={() => takeAction("pause_ai")} disabled={!active || !!actionLoading}>{actionLoading === "pause_ai" ? "处理中…" : "暂停智能指导"}</button><button className="primary" onClick={() => takeAction("resume")} disabled={!active || !!actionLoading}>{actionLoading === "resume" ? "正在恢复…" : "确认并恢复流程"}</button></div></section>
+          {detail.latest_submission && <section className="action-group"><div className="action-section-heading"><div><h3>作品评价</h3><p>{detail.latest_submission.snapshot_label || "已提交"} · {detail.latest_submission.formal_grade ? "成绩已发布" : "待复核"}</p></div></div><button className="primary" onClick={() => onReview(detail.latest_submission!.id)}>打开评价页</button></section>}
+        </div>
+      </section>
     </div>
   </>;
 }

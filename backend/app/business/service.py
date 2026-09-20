@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .faq import DEFAULT_TASK_POLICY, FAQ_STAGES, FAQ_TASK_KEY, FAQ_VERSION
+from .faq import DEFAULT_TASK_POLICY, FAQ_RUBRIC, FAQ_STAGES, FAQ_TASK_KEY, FAQ_VERSION
 from .models import (
     Attempt,
     CourseMembership,
@@ -13,6 +13,7 @@ from .models import (
     OperationLedger,
     RequirementDefinition,
     RequirementResult,
+    RubricDefinition,
     Snapshot,
     Task,
     TaskStage,
@@ -68,6 +69,8 @@ class BusinessService:
             session.add(task); await session.flush()
         existing = await session.scalar(select(TaskVersion).where(TaskVersion.task_id == task.id, TaskVersion.version == FAQ_VERSION))
         if existing:
+            await self.ensure_rubric(session, task_version_id=existing.id)
+            await session.commit()
             return existing
         version = TaskVersion(task_id=task.id, version=FAQ_VERSION, policy=dict(DEFAULT_TASK_POLICY))
         session.add(version); await session.flush()
@@ -79,8 +82,32 @@ class BusinessService:
                     task_stage_id=stage.id, requirement_key=req_key, kind=kind,
                     required=True, version=1, evaluator=evaluator, config=config,
                 ))
+        await self.ensure_rubric(session, task_version_id=version.id)
         await session.commit()
         return version
+
+    async def ensure_rubric(self, session: AsyncSession, *, task_version_id: str) -> list[RubricDefinition]:
+        existing = list((await session.scalars(
+            select(RubricDefinition)
+            .where(RubricDefinition.task_version_id == task_version_id)
+            .order_by(RubricDefinition.position)
+        )).all())
+        if existing:
+            return existing
+        created = []
+        for position, (key, title, max_score, requirement_keys) in enumerate(FAQ_RUBRIC):
+            item = RubricDefinition(
+                task_version_id=task_version_id,
+                item_key=key,
+                title=title,
+                max_score=max_score,
+                position=position,
+                requirement_keys=list(requirement_keys),
+            )
+            session.add(item)
+            created.append(item)
+        await session.flush()
+        return created
 
     async def create_attempt(self, session: AsyncSession, *, task_version_id: str, learner_id: str, mode: str) -> Attempt:
         version = await session.get(TaskVersion, task_version_id)

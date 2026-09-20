@@ -1,0 +1,95 @@
+{
+  "container": "teachingagent-postgres-02b",
+  "port": 59453,
+  "alembic_exit": 0,
+  "alembic_stdout": "",
+  "alembic_stderr": "INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.\nINFO  [alembic.runtime.migration] Will assume transactional DDL.\nINFO  [alembic.runtime.migration] Running upgrade 20260920_0003 -> 20260920_0004, Add submission, rubric, review, and formal grade tables.",
+  "before": {
+    "alembic_version": "20260920_0003",
+    "counts": {
+      "attempts": 26,
+      "snapshots": 28,
+      "requirement_results": 39,
+      "teaching_events": 64,
+      "interventions": 7
+    },
+    "student_attempt": {
+      "id": "ef885ba8-cd80-4946-a7a0-65c23f303039",
+      "state_version": 11,
+      "status": "active"
+    },
+    "student_snapshots": [
+      {
+        "id": "255ecbcd-fefb-49db-8d0d-fabf4a924dbb",
+        "sequence": 1
+      },
+      {
+        "id": "90c3fbbb-7981-4de7-80fd-b7352756aa67",
+        "sequence": 2
+      },
+      {
+        "id": "09319511-fd79-47c4-b01e-961f36788765",
+        "sequence": 3
+      },
+      {
+        "id": "390121f7-18f5-4a4e-9130-99b72a355063",
+        "sequence": 4
+      }
+    ],
+    "teacher_intervention": {
+      "id": "5aa75d37-349d-4ae7-ada8-dbdbea6a5287",
+      "status": "RESOLVED",
+      "allow_l2": true
+    },
+    "checkpoint_tables": 0
+  },
+  "after": {
+    "alembic_version": "20260920_0004",
+    "counts": {
+      "attempts": 26,
+      "snapshots": 28,
+      "requirement_results": 39,
+      "teaching_events": 64,
+      "interventions": 7
+    },
+    "student_attempt": {
+      "id": "ef885ba8-cd80-4946-a7a0-65c23f303039",
+      "state_version": 11,
+      "status": "active"
+    },
+    "student_snapshots": [
+      {
+        "id": "255ecbcd-fefb-49db-8d0d-fabf4a924dbb",
+        "sequence": 1
+      },
+      {
+        "id": "90c3fbbb-7981-4de7-80fd-b7352756aa67",
+        "sequence": 2
+      },
+      {
+        "id": "09319511-fd79-47c4-b01e-961f36788765",
+        "sequence": 3
+      },
+      {
+        "id": "390121f7-18f5-4a4e-9130-99b72a355063",
+        "sequence": 4
+      }
+    ],
+    "teacher_intervention": {
+      "id": "5aa75d37-349d-4ae7-ada8-dbdbea6a5287",
+      "status": "RESOLVED",
+      "allow_l2": true
+    },
+    "checkpoint_tables": 0
+  },
+  "new_tables": [
+    "formal_grades",
+    "review_items",
+    "reviews",
+    "rubric_definitions",
+    "submissions"
+  ],
+  "teaching_app_can_insert_submissions": true,
+  "checkpoint_url_configured": true,
+  "old_facts_unchanged": true
+}

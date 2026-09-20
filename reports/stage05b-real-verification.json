@@ -1,0 +1,219 @@
+{
+  "attempt_id": "7bef6b81-9fe4-4dac-bc7f-2fe5a5e829a4",
+  "submission_id": "68d633ee-ffa9-4f31-b3a1-803981e8e4f0",
+  "snapshot_a": "952e3aad-d9f6-4839-b005-f30eb3d87aae",
+  "snapshot_b": "0f72925a-a3d9-48c1-a9e7-e2bb8d304fb2",
+  "snapshot_c": "16eddba9-d46a-4725-b195-7ca1ce6871a8",
+  "freeze": {
+    "submission_snapshot": "0f72925a-a3d9-48c1-a9e7-e2bb8d304fb2",
+    "snapshot_b": "0f72925a-a3d9-48c1-a9e7-e2bb8d304fb2",
+    "snapshot_c": "16eddba9-d46a-4725-b195-7ca1ce6871a8",
+    "label": "Snapshot B",
+    "auto_on_b": [
+      {
+        "key": "retrieval_public_tests",
+        "name": "已知问题能够命中",
+        "kind": "AUTO_TEST",
+        "status": "SATISFIED",
+        "operation_id": "verify-b:retrieval_public_tests:e5a7492d",
+        "evaluator": "openhands:run_faq_tests:v1"
+      },
+      {
+        "key": "retrieval_observation",
+        "name": "已提交调试观察",
+        "kind": "STUDENT_EXPLANATION",
+        "status": "SATISFIED",
+        "operation_id": "verify-b:retrieval_observation:8c9407c1",
+        "evaluator": "server:student_explanation:v1"
+      }
+    ],
+    "bound_to_b": true,
+    "c_did_not_replace_b": true
+  },
+  "teacher_review_db": {
+    "snapshot_id": "0f72925a-a3d9-48c1-a9e7-e2bb8d304fb2",
+    "status": "SATISFIED",
+    "requirement_key": "delivery_review"
+  },
+  "formal_grade": {
+    "total_score": 95,
+    "max_score": 100,
+    "published_at": "2026-09-20T15:56:20.300916+00:00",
+    "published_by": "陈老师"
+  },
+  "formal_grade_db": {
+    "total_score": 95,
+    "max_score": 100,
+    "published_by": "d10924f3-b028-4823-936e-a9d3b784705c"
+  },
+  "student_recap": {
+    "ok": true,
+    "lanes": [
+      {
+        "key": "function_boundary",
+        "auto": "SATISFIED",
+        "ai_score": null,
+        "teacher": "confirmed",
+        "teacher_score": 40
+      },
+      {
+        "key": "debug_explanation",
+        "auto": "SATISFIED",
+        "ai_score": null,
+        "teacher": "confirmed",
+        "teacher_score": 25
+      },
+      {
+        "key": "transfer_scheme",
+        "auto": "NOT_RUN",
+        "ai_score": null,
+        "teacher": "confirmed",
+        "teacher_score": 20
+      },
+      {
+        "key": "delivery_collab",
+        "auto": "NOT_RUN",
+        "ai_score": null,
+        "teacher": "confirmed",
+        "teacher_score": 10
+      }
+    ],
+    "formal_grade": {
+      "total_score": 95,
+      "max_score": 100,
+      "published_at": "2026-09-20T15:56:20.300916+00:00",
+      "published_by": "陈老师",
+      "change_reason": ""
+    }
+  },
+  "negatives": {
+    "idempotent_same_snapshot_operation": {
+      "pass": true,
+      "status": 200,
+      "body": {
+        "id": "68d633ee-ffa9-4f31-b3a1-803981e8e4f0",
+        "duplicate": true,
+        "sequence": 1,
+        "snapshot_id": "0f72925a-a3d9-48c1-a9e7-e2bb8d304fb2",
+        "snapshot_label": "Snapshot B",
+        "created_at": "2026-09-20T15:56:19.985177+00:00"
+      }
+    },
+    "stale_snapshot_rejected": {
+      "pass": true,
+      "status": 409,
+      "body": {
+        "detail": {
+          "code": "stale_snapshot",
+          "message": "提交必须绑定当前最新 Snapshot"
+        }
+      }
+    },
+    "same_snapshot_not_duplicated": {
+      "pass": true,
+      "status": 200,
+      "body": {
+        "id": "68d633ee-ffa9-4f31-b3a1-803981e8e4f0",
+        "duplicate": true,
+        "sequence": 1,
+        "snapshot_id": "0f72925a-a3d9-48c1-a9e7-e2bb8d304fb2",
+        "snapshot_label": "Snapshot B",
+        "created_at": "2026-09-20T15:56:19.985177+00:00"
+      }
+    },
+    "unconfirmed_items_block_publish": {
+      "pass": true,
+      "status": 409,
+      "body": {
+        "detail": {
+          "code": "unconfirmed_rubric_item",
+          "message": "仍有量规项待评价，不能发布正式成绩"
+        }
+      }
+    },
+    "missing_reason_blocks_publish": {
+      "pass": true,
+      "status": 409,
+      "body": {
+        "detail": {
+          "code": "teacher_reason_required",
+          "message": "确认或改分必须填写理由"
+        }
+      }
+    },
+    "student_forged_formal_grade_rejected": {
+      "pass": true,
+      "status": 422,
+      "body": {
+        "detail": [
+          {
+            "type": "extra_forbidden",
+            "loc": [
+              "body",
+              "items",
+              0,
+              "formal_grade"
+            ],
+            "msg": "Extra inputs are not permitted",
+            "input": 100
+          }
+        ]
+      }
+    },
+    "outsider_teacher_rejected": {
+      "pass": true,
+      "status": [
+        403,
+        403
+      ]
+    },
+    "teacher_review_wrong_snapshot_rejected": {
+      "pass": true,
+      "status": 422,
+      "body": {
+        "detail": [
+          {
+            "type": "extra_forbidden",
+            "loc": [
+              "body",
+              "snapshot_id"
+            ],
+            "msg": "Extra inputs are not permitted",
+            "input": "16eddba9-d46a-4725-b195-7ca1ce6871a8"
+          }
+        ]
+      }
+    },
+    "teacher_review_bound_to_submission_snapshot": {
+      "pass": true,
+      "body": {
+        "requirement_key": "delivery_review",
+        "status": "SATISFIED",
+        "snapshot_id": "0f72925a-a3d9-48c1-a9e7-e2bb8d304fb2",
+        "evaluator": "teacher_review_v1",
+        "operation_id": "verify-teacher-review-01"
+      }
+    },
+    "ai_score_text_does_not_write_grade": {
+      "pass": true,
+      "formal_grade": {
+        "total_score": 95,
+        "max_score": 100,
+        "published_at": "2026-09-20T15:56:20.300916+00:00",
+        "published_by": "陈老师"
+      },
+      "db": {
+        "total_score": 95,
+        "max_score": 100,
+        "published_by": "d10924f3-b028-4823-936e-a9d3b784705c"
+      }
+    },
+    "repeat_publish_does_not_duplicate_grade": {
+      "pass": true,
+      "status": 200,
+      "grade_count": 1
+    }
+  },
+  "all_negatives_pass": true,
+  "freeze_pass": true
+}

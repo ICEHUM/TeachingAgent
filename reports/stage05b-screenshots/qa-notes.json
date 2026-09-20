@@ -1,0 +1,126 @@
+[
+  {
+    "page": "student-submit",
+    "viewport": [
+      1440,
+      900
+    ],
+    "scrollWidth": 1440,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "student-submit",
+    "viewport": [
+      1366,
+      768
+    ],
+    "scrollWidth": 1366,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "student-submit",
+    "viewport": [
+      1280,
+      800
+    ],
+    "scrollWidth": 1280,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "student-submit",
+    "viewport": [
+      390,
+      844
+    ],
+    "scrollWidth": 390,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "student-recap",
+    "viewport": [
+      1440,
+      900
+    ],
+    "has_three_lanes": true,
+    "snapshot_b": true,
+    "scrollWidth": 1440,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "teacher-review",
+    "viewport": [
+      1440,
+      900
+    ],
+    "snapshot_b": true,
+    "published_95": true,
+    "scrollWidth": 1440,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "student-recap",
+    "viewport": [
+      1366,
+      768
+    ],
+    "has_three_lanes": true,
+    "snapshot_b": true,
+    "scrollWidth": 1366,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "teacher-review",
+    "viewport": [
+      1366,
+      768
+    ],
+    "snapshot_b": true,
+    "published_95": true,
+    "scrollWidth": 1366,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "student-recap",
+    "viewport": [
+      1280,
+      800
+    ],
+    "has_three_lanes": true,
+    "snapshot_b": true,
+    "scrollWidth": 1280,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "teacher-review",
+    "viewport": [
+      1280,
+      800
+    ],
+    "snapshot_b": true,
+    "published_95": true,
+    "scrollWidth": 1280,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "student-recap",
+    "viewport": [
+      390,
+      844
+    ],
+    "has_three_lanes": true,
+    "snapshot_b": true,
+    "scrollWidth": 390,
+    "horizontalOverflow": false
+  },
+  {
+    "page": "teacher-review",
+    "viewport": [
+      390,
+      844
+    ],
+    "snapshot_b": true,
+    "published_95": true,
+    "scrollWidth": 390,
+    "horizontalOverflow": false
+  }
+]

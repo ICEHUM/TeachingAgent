@@ -188,3 +188,73 @@ class OperationLedger(Base):
     result_ref: Mapped[str | None] = mapped_column(String(300), nullable=True)
     result_payload: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class RubricDefinition(Base):
+    __tablename__ = "rubric_definitions"
+    __table_args__ = (UniqueConstraint("task_version_id", "item_key"), {"schema": BUSINESS_SCHEMA})
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    task_version_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.task_versions.id"), index=True)
+    item_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    max_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    requirement_keys: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class Submission(Base):
+    __tablename__ = "submissions"
+    __table_args__ = (
+        UniqueConstraint("attempt_id", "operation_id"),
+        UniqueConstraint("attempt_id", "snapshot_id"),
+        {"schema": BUSINESS_SCHEMA},
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    attempt_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.attempts.id"), index=True)
+    snapshot_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.snapshots.id"), index=True)
+    operation_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(24), default="submitted")
+    explanation: Mapped[str] = mapped_column(Text, default="")
+    assistance: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+    __table_args__ = (UniqueConstraint("submission_id"), {"schema": BUSINESS_SCHEMA})
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    submission_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.submissions.id"), index=True)
+    teacher_id: Mapped[str | None] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.users.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="draft", index=True)
+    publish_operation_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ReviewItem(Base):
+    __tablename__ = "review_items"
+    __table_args__ = (UniqueConstraint("review_id", "rubric_key"), {"schema": BUSINESS_SCHEMA})
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    review_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.reviews.id"), index=True)
+    rubric_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    auto_status: Mapped[str] = mapped_column(String(24), default="NOT_RUN")
+    auto_summary: Mapped[str] = mapped_column(Text, default="")
+    ai_text: Mapped[str] = mapped_column(Text, default="")
+    ai_evidence_refs: Mapped[list] = mapped_column(JSON, default=list)
+    teacher_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    teacher_reason: Mapped[str] = mapped_column(Text, default="")
+    teacher_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class FormalGrade(Base):
+    __tablename__ = "formal_grades"
+    __table_args__ = (UniqueConstraint("submission_id"), {"schema": BUSINESS_SCHEMA})
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    submission_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.submissions.id"), index=True)
+    review_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.reviews.id"))
+    total_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    published_by: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.users.id"))
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    change_reason: Mapped[str] = mapped_column(Text, default="")

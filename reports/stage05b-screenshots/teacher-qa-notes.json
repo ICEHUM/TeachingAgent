@@ -1,0 +1,38 @@
+[
+  {
+    "viewport": "1440x900",
+    "has_rubric": true,
+    "has_auto": true,
+    "has_ai": true,
+    "has_teacher": true,
+    "snapshot_b": true,
+    "score": true
+  },
+  {
+    "viewport": "1366x768",
+    "has_rubric": true,
+    "has_auto": true,
+    "has_ai": true,
+    "has_teacher": true,
+    "snapshot_b": true,
+    "score": true
+  },
+  {
+    "viewport": "1280x800",
+    "has_rubric": true,
+    "has_auto": true,
+    "has_ai": true,
+    "has_teacher": true,
+    "snapshot_b": true,
+    "score": true
+  },
+  {
+    "viewport": "390x844",
+    "has_rubric": true,
+    "has_auto": true,
+    "has_ai": true,
+    "has_teacher": true,
+    "snapshot_b": true,
+    "score": true
+  }
+]
