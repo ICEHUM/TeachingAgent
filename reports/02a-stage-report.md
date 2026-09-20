@@ -5,7 +5,7 @@
 
 ## 交付结果
 
-- 新增 12 类业务事实模型：User、Course、CourseMembership、Task、TaskVersion、TaskStage、RequirementDefinition、Attempt、Snapshot、TeachingEvent、RequirementResult、Intervention、OperationLedger（正式成绩复杂业务未加入）。
+- 新增 13 类业务事实模型：User、Course、CourseMembership、Task、TaskVersion、TaskStage、RequirementDefinition、Attempt、Snapshot、TeachingEvent、RequirementResult、Intervention、OperationLedger（正式成绩复杂业务未加入）。
 - `teaching_business` 是事实权威；`langgraph_checkpoint` 只恢复流程。教师介入列表与教学时间线只查询业务表。
 - Graph 新增 `persist_intervention -> interrupt` 顺序，以及 `persist_event -> evaluate_requirements -> stage_assessment`。
 - 客户端 `stage_requirements_met` 和 `formal_grade` 入库前丢弃；阶段通过由 RequirementEvaluator 聚合全部必需 RequirementResult。
@@ -52,12 +52,12 @@
 
 ## 风险与未完成项
 
-1. 当前主机没有可用的 Docker CLI 或 PostgreSQL 服务，因此 role/schema GRANT、Alembic online upgrade/downgrade、`AsyncPostgresSaver.setup()` 两次执行尚未在真实 PostgreSQL 实例验证；代码、离线 DDL与 SQLite 业务集成测试已通过。
+1. 阶段02A的 Codex 沙箱不能按命令名执行宿主 Docker CLI，因此当时未完成真实 PostgreSQL 验证。Stage 02B 已确认宿主 Docker Linux Engine 可用，并完成真实验证；详见 `reports/02b-stage-report.md`。
 2. Checkpoint 初始化采用官方幂等 `setup()`，但生产部署仍需加单实例 migration job 和失败告警。
-3. API 使用 `X-User-Id` 作为已认证主体输入；正式部署需由可信认证中间件注入，不能直接信任公网请求头。
+3. Stage 02B 已将 `X-User-Id` 限制在显式启用 `DEV_AUTH_ENABLED` 的 DEV/TEST 环境；生产认证本身仍待后续 OAuth/JWT 或可信网关接入。
 4. Graph resume runtime 以应用注入接口保留；本阶段没有接真实 OpenHands，也没有启动真实课堂 worker。
 5. Requirement evaluator 已实现聚合与版本校验；AUTO_TEST、STATIC_CHECK 等具体执行器仍是后续阶段工作。
-6. 迁移当前以业务 SQLAlchemy metadata 快照执行 `create_all/drop_all`；在后续模型演进前应将新增变更拆成独立显式 revision，避免修改首个 revision。
+6. Stage 02B 已将首个 revision 固化为显式 `op.create_table/create_index/create_unique_constraint`，并通过真实 upgrade/downgrade 与 metadata drift 检查。
 7. 未实现正式 UI、真实 OpenHands 执行、复杂成绩表、生产认证和部署监控。
 
 阶段 02A 在此停止，不进入真实 OpenHands 或正式 UI。

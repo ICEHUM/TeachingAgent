@@ -13,7 +13,9 @@ config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
 if os.environ.get("TEACHING_ALEMBIC_DATABASE_URL"):
-    config.set_main_option("sqlalchemy.url", os.environ["TEACHING_ALEMBIC_DATABASE_URL"])
+    # Alembic stores options in ConfigParser, where a literal percent must be doubled.
+    environment_url = os.environ["TEACHING_ALEMBIC_DATABASE_URL"].replace("%", "%%")
+    config.set_main_option("sqlalchemy.url", environment_url)
 target_metadata = Base.metadata
 
 

@@ -111,6 +111,9 @@ async def test_pending_intervention_survives_service_restart_and_unauthorized_te
             session, attempt=current, operation_id="intervention-op", reason="l2_authorization_required",
             evidence_refs=["evidence:1"],
         )
+        item = await service.mark_checkpoint_result(
+            session, intervention_id=item.id, succeeded=True
+        )
         item_id = item.id
     await engine.dispose()
 
@@ -119,10 +122,11 @@ async def test_pending_intervention_survives_service_restart_and_unauthorized_te
     restarted_service = BusinessService()
     async with restarted_factory() as session:
         persisted = await session.get(Intervention, item_id)
-        assert persisted is not None and persisted.status == "pending"
+        assert persisted is not None and persisted.status == "WAITING_TEACHER"
         with pytest.raises(BusinessRuleError, match="course_membership_required"):
-            await restarted_service.resolve_intervention(
-                session, intervention_id=item_id, teacher_id="teacher-2", expected_state_version=0,
+            await restarted_service.begin_resume(
+                session, intervention_id=item_id, teacher_id="teacher-2",
+                resume_operation_id="unauthorized-resume", expected_state_version=0,
                 response="unauthorized", allow_l2=True,
             )
     await restarted_engine.dispose()
@@ -137,14 +141,16 @@ async def test_business_state_wins_over_checkpoint_version_and_attempts_are_isol
         item, _ = await service.create_intervention(
             session, attempt=first, operation_id="cp-conflict", reason="threshold", evidence_refs=[]
         )
+        await service.mark_checkpoint_result(session, intervention_id=item.id, succeeded=True)
         await service.record_event(
             session, attempt=first, actor_id="student-1", operation_id="business-advanced",
             event_type="submission", expected_state_version=0, payload={},
         )
         # A checkpoint still claiming version 0 cannot override the authoritative attempt version 1.
         with pytest.raises(BusinessRuleError, match="stale_state_version"):
-            await service.resolve_intervention(
-                session, intervention_id=item.id, teacher_id="teacher-1", expected_state_version=0,
+            await service.begin_resume(
+                session, intervention_id=item.id, teacher_id="teacher-1",
+                resume_operation_id="stale-resume", expected_state_version=0,
                 response="stale checkpoint", allow_l2=False,
             )
         assert not (await session.scalars(select(TeachingEvent).where(TeachingEvent.attempt_id == attempt2.id))).all()
@@ -173,3 +179,88 @@ def test_bootstrap_sql_enforces_role_and_schema_separation():
     assert "ALTER ROLE langgraph_cp SET search_path = langgraph_checkpoint, public" in sql
     assert "REVOKE ALL ON SCHEMA langgraph_checkpoint FROM teaching_app" in sql
     assert "REVOKE ALL ON SCHEMA teaching_business FROM langgraph_cp" in sql
+    assert "REVOKE ALL ON SCHEMA teaching_business FROM PUBLIC" in sql
+    assert "REVOKE ALL ON SCHEMA langgraph_checkpoint FROM PUBLIC" in sql
+
+
+@pytest.mark.asyncio
+async def test_intervention_checkpoint_failure_is_hidden_and_retry_is_idempotent():
+    engine, factory = await make_database()
+    service, _, attempt, _ = await seed(factory)
+    async with factory() as session:
+        current = await session.get(type(attempt), attempt.id)
+        item, duplicate = await service.create_intervention(
+            session, attempt=current, operation_id="checkpoint-op", reason="threshold",
+            evidence_refs=["evidence:checkpoint"],
+        )
+        assert duplicate is False and item.status == "CREATING"
+        failed = await service.mark_checkpoint_result(
+            session, intervention_id=item.id, succeeded=False, error_code="simulated"
+        )
+        assert failed.status == "CHECKPOINT_FAILED"
+        assert await service.list_waiting_interventions(session) == []
+
+        same, duplicate = await service.create_intervention(
+            session, attempt=current, operation_id="checkpoint-op", reason="threshold",
+            evidence_refs=["evidence:checkpoint"],
+        )
+        assert duplicate is True and same.id == item.id
+        await service.prepare_checkpoint_retry(session, intervention_id=item.id)
+        waiting = await service.mark_checkpoint_result(
+            session, intervention_id=item.id, succeeded=True
+        )
+        assert waiting.status == "WAITING_TEACHER"
+        assert [record.id for record in await service.list_waiting_interventions(session)] == [item.id]
+        assert len((await session.scalars(select(Intervention).where(
+            Intervention.operation_id == "checkpoint-op"
+        ))).all()) == 1
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_resume_failure_preserves_teacher_action_and_same_operation_retries():
+    engine, factory = await make_database()
+    service, _, attempt, _ = await seed(factory)
+    async with factory() as session:
+        current = await session.get(type(attempt), attempt.id)
+        item, _ = await service.create_intervention(
+            session, attempt=current, operation_id="resume-create", reason="threshold",
+            evidence_refs=[],
+        )
+        await service.mark_checkpoint_result(session, intervention_id=item.id, succeeded=True)
+        resuming, duplicate = await service.begin_resume(
+            session, intervention_id=item.id, teacher_id="teacher-1",
+            resume_operation_id="resume-op", expected_state_version=0,
+            response="保留这条教师处理意见", allow_l2=True,
+        )
+        assert duplicate is False and resuming.status == "RESUMING"
+        failed = await service.finish_resume(
+            session, intervention_id=item.id, resume_operation_id="resume-op",
+            succeeded=False, error_code="simulated",
+        )
+        assert failed.status == "RESUME_FAILED"
+        assert failed.response == "保留这条教师处理意见"
+        assert failed.assigned_teacher_id == "teacher-1"
+        assert failed.allow_l2 is True
+
+        retrying, duplicate = await service.begin_resume(
+            session, intervention_id=item.id, teacher_id="teacher-1",
+            resume_operation_id="resume-op", expected_state_version=0,
+            response="不会覆盖原教师处理意见", allow_l2=False,
+        )
+        assert duplicate is True and retrying.status == "RESUMING"
+        assert retrying.response == "保留这条教师处理意见"
+        resolved = await service.finish_resume(
+            session, intervention_id=item.id, resume_operation_id="resume-op", succeeded=True
+        )
+        assert resolved.status == "RESOLVED"
+        replay, duplicate = await service.begin_resume(
+            session, intervention_id=item.id, teacher_id="teacher-1",
+            resume_operation_id="resume-op", expected_state_version=0,
+            response="重复请求", allow_l2=False,
+        )
+        assert duplicate is True and replay.status == "RESOLVED"
+        assert len((await session.scalars(select(OperationLedger).where(
+            OperationLedger.operation_id == "resume-op"
+        ))).all()) == 1
+    await engine.dispose()

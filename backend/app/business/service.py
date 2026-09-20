@@ -25,6 +25,14 @@ class BusinessRuleError(RuntimeError):
     pass
 
 
+INTERVENTION_CREATING = "CREATING"
+INTERVENTION_WAITING = "WAITING_TEACHER"
+INTERVENTION_RESUMING = "RESUMING"
+INTERVENTION_RESOLVED = "RESOLVED"
+INTERVENTION_CHECKPOINT_FAILED = "CHECKPOINT_FAILED"
+INTERVENTION_RESUME_FAILED = "RESUME_FAILED"
+
+
 class BusinessService:
     def __init__(self, evaluator: RequirementEvaluator | None = None):
         self.evaluator = evaluator or RequirementEvaluator()
@@ -137,25 +145,166 @@ class BusinessService:
         if existing:
             return existing, True
         intervention = Intervention(attempt_id=attempt.id, operation_id=operation_id, reason=reason,
-                                    requested_state_version=attempt.state_version, evidence_refs=evidence_refs)
+                                    status=INTERVENTION_CREATING,
+                                    requested_state_version=attempt.state_version,
+                                    evidence_refs=evidence_refs)
         session.add(intervention)
         session.add(OperationLedger(scope="intervention", operation_id=operation_id,
-                                    result_ref=f"intervention:{intervention.id}"))
+                                    status="COMPLETED",
+                                    result_ref=f"intervention:{intervention.id}",
+                                    result_payload={"status": INTERVENTION_CREATING}))
         await session.commit(); await session.refresh(intervention)
         return intervention, False
 
-    async def resolve_intervention(self, session: AsyncSession, *, intervention_id: str, teacher_id: str,
-                                   expected_state_version: int, response: str, allow_l2: bool) -> Intervention:
+    async def mark_checkpoint_result(
+        self,
+        session: AsyncSession,
+        *,
+        intervention_id: str,
+        succeeded: bool,
+        error_code: str | None = None,
+    ) -> Intervention:
         intervention = await session.get(Intervention, intervention_id)
-        if intervention is None or intervention.status != "pending":
-            raise BusinessRuleError("pending_intervention_not_found")
+        if intervention is None:
+            raise BusinessRuleError("intervention_not_found")
+        if succeeded:
+            if intervention.status in {INTERVENTION_CREATING, INTERVENTION_CHECKPOINT_FAILED}:
+                intervention.status = INTERVENTION_WAITING
+        elif intervention.status in {INTERVENTION_CREATING, INTERVENTION_CHECKPOINT_FAILED}:
+            intervention.status = INTERVENTION_CHECKPOINT_FAILED
+        ledger = await session.scalar(select(OperationLedger).where(
+            OperationLedger.scope == "intervention",
+            OperationLedger.operation_id == intervention.operation_id,
+        ))
+        if ledger is not None:
+            ledger.result_payload = {
+                "status": intervention.status,
+                "checkpoint_error": error_code,
+            }
+        await session.commit()
+        await session.refresh(intervention)
+        return intervention
+
+    async def prepare_checkpoint_retry(
+        self, session: AsyncSession, *, intervention_id: str
+    ) -> Intervention:
+        intervention = await session.get(Intervention, intervention_id)
+        if intervention is None:
+            raise BusinessRuleError("intervention_not_found")
+        if intervention.status == INTERVENTION_CHECKPOINT_FAILED:
+            intervention.status = INTERVENTION_CREATING
+            await session.commit()
+            await session.refresh(intervention)
+        elif intervention.status not in {INTERVENTION_CREATING, INTERVENTION_WAITING}:
+            raise BusinessRuleError("checkpoint_retry_not_allowed")
+        return intervention
+
+    async def list_waiting_interventions(
+        self, session: AsyncSession
+    ) -> list[Intervention]:
+        return list((await session.scalars(
+            select(Intervention)
+            .where(Intervention.status == INTERVENTION_WAITING)
+            .order_by(Intervention.created_at)
+        )).all())
+
+    async def begin_resume(
+        self,
+        session: AsyncSession,
+        *,
+        intervention_id: str,
+        teacher_id: str,
+        resume_operation_id: str,
+        expected_state_version: int,
+        response: str,
+        allow_l2: bool,
+    ) -> tuple[Intervention, bool]:
+        intervention = await session.get(Intervention, intervention_id)
+        if intervention is None:
+            raise BusinessRuleError("intervention_not_found")
         attempt = await session.get(Attempt, intervention.attempt_id)
         if attempt is None:
             raise BusinessRuleError("attempt_not_found")
         await self.authorize_attempt(session, attempt=attempt, user_id=teacher_id, teacher=True)
         if attempt.state_version != expected_state_version or intervention.requested_state_version != expected_state_version:
             raise BusinessRuleError("stale_state_version")
-        intervention.status = "resolved"; intervention.assigned_teacher_id = teacher_id
-        intervention.response = response; intervention.allow_l2 = allow_l2
-        intervention.resolved_at = datetime.now(UTC)
-        await session.commit(); return intervention
+        task_version = await session.get(TaskVersion, attempt.task_version_id)
+        if task_version is None:
+            raise BusinessRuleError("task_version_not_found")
+        policy = dict(task_version.policy or {})
+        if allow_l2 and (
+            attempt.mode == "assessment" or policy.get("max_help_level") == "L0"
+        ):
+            raise BusinessRuleError("l2_forbidden_by_current_policy")
+
+        scope = f"intervention-resume:{intervention.id}"
+        existing = await session.scalar(select(OperationLedger).where(
+            OperationLedger.scope == scope,
+            OperationLedger.operation_id == resume_operation_id,
+        ))
+        if existing is not None:
+            if intervention.assigned_teacher_id != teacher_id:
+                raise BusinessRuleError("resume_operation_owner_mismatch")
+            if intervention.status == INTERVENTION_RESUME_FAILED:
+                intervention.status = INTERVENTION_RESUMING
+                existing.status = "RUNNING"
+                existing.result_payload = {"status": INTERVENTION_RESUMING}
+                await session.commit()
+                await session.refresh(intervention)
+            elif intervention.status not in {INTERVENTION_RESUMING, INTERVENTION_RESOLVED}:
+                raise BusinessRuleError("resume_retry_not_allowed")
+            return intervention, True
+
+        if intervention.status != INTERVENTION_WAITING:
+            raise BusinessRuleError("waiting_intervention_not_found")
+        intervention.status = INTERVENTION_RESUMING
+        intervention.assigned_teacher_id = teacher_id
+        intervention.response = response
+        intervention.allow_l2 = allow_l2
+        session.add(OperationLedger(
+            scope=scope,
+            operation_id=resume_operation_id,
+            status="RUNNING",
+            result_ref=f"intervention:{intervention.id}",
+            result_payload={"status": INTERVENTION_RESUMING},
+        ))
+        await session.commit()
+        await session.refresh(intervention)
+        return intervention, False
+
+    async def finish_resume(
+        self,
+        session: AsyncSession,
+        *,
+        intervention_id: str,
+        resume_operation_id: str,
+        succeeded: bool,
+        error_code: str | None = None,
+    ) -> Intervention:
+        intervention = await session.get(Intervention, intervention_id)
+        if intervention is None:
+            raise BusinessRuleError("intervention_not_found")
+        scope = f"intervention-resume:{intervention.id}"
+        ledger = await session.scalar(select(OperationLedger).where(
+            OperationLedger.scope == scope,
+            OperationLedger.operation_id == resume_operation_id,
+        ))
+        if ledger is None:
+            raise BusinessRuleError("resume_operation_not_found")
+        if succeeded:
+            if intervention.status == INTERVENTION_RESUMING:
+                intervention.status = INTERVENTION_RESOLVED
+                intervention.resolved_at = datetime.now(UTC)
+            elif intervention.status != INTERVENTION_RESOLVED:
+                raise BusinessRuleError("resume_completion_not_allowed")
+            ledger.status = "COMPLETED"
+        else:
+            if intervention.status == INTERVENTION_RESUMING:
+                intervention.status = INTERVENTION_RESUME_FAILED
+            elif intervention.status != INTERVENTION_RESUME_FAILED:
+                raise BusinessRuleError("resume_failure_not_allowed")
+            ledger.status = "FAILED"
+        ledger.result_payload = {"status": intervention.status, "error": error_code}
+        await session.commit()
+        await session.refresh(intervention)
+        return intervention

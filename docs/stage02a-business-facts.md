@@ -67,7 +67,7 @@ erDiagram
 | POST | `/api/interventions/{id}/resolve` | 重验权限/归属/版本，持久化处理并调用已配置 Graph resume runtime |
 | GET | `/api/attempts/{id}/events` | 读取业务 TeachingEvent 时间线 |
 
-身份由 `X-User-Id` 映射到数据库用户；角色、课程成员关系和对象归属全部从业务数据库读取。
+仅在 DEV/TEST 且显式 `DEV_AUTH_ENABLED=true` 时，身份可由 `X-User-Id` 映射到数据库用户；生产环境启用该方式会拒绝启动。角色、课程成员关系和对象归属全部从业务数据库读取。
 
 ## 更新后的 Graph
 

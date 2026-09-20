@@ -28,9 +28,12 @@ async def db_session(request: Request):
 
 
 async def current_user(
+    request: Request,
     session: Annotated[AsyncSession, Depends(db_session)],
     x_user_id: Annotated[str, Header(alias="X-User-Id")],
 ) -> User:
+    if not request.app.state.dev_auth_enabled:
+        raise HTTPException(401, "dev_auth_disabled")
     user = await session.get(User, x_user_id)
     if user is None:
         raise HTTPException(401, "unknown_user")
@@ -67,6 +70,7 @@ class InterventionCreate(BaseModel):
 
 
 class InterventionResolve(BaseModel):
+    operation_id: str
     expected_state_version: int
     response: str
     allow_l2: bool = False
@@ -167,7 +171,7 @@ async def list_interventions(session: Annotated[AsyncSession, Depends(db_session
     if user.system_role not in {"teacher", "admin"}:
         raise HTTPException(403, "teacher_role_required")
     # Business table only. Checkpoint tables are never queried by this endpoint.
-    items = list((await session.scalars(select(Intervention).where(Intervention.status == "pending").order_by(Intervention.created_at))).all())
+    items = await service.list_waiting_interventions(session)
     visible = []
     for item in items:
         attempt = await session.get(Attempt, item.attempt_id)
@@ -193,25 +197,27 @@ async def get_intervention(intervention_id: str, session: Annotated[AsyncSession
 
 @router.post("/interventions/{intervention_id}/resolve")
 async def resolve_intervention(intervention_id: str, body: InterventionResolve, request: Request, session: Annotated[AsyncSession, Depends(db_session)], user: Annotated[User, Depends(current_user)]):
-    try:
-        item = await service.resolve_intervention(session, intervention_id=intervention_id, teacher_id=user.id,
-                                                  expected_state_version=body.expected_state_version,
-                                                  response=body.response, allow_l2=body.allow_l2)
-    except BusinessRuleError as exc:
-        raise fail(exc) from exc
     runtime = getattr(request.app.state, "graph_resume_runtime", None)
-    resume_status = "not_configured"
-    if runtime is not None:
+    if runtime is None:
+        raise HTTPException(503, "graph_resume_runtime_not_configured")
+    try:
         await runtime.resume(
-            attempt_id=item.attempt_id,
-            intervention_id=item.id,
+            intervention_id=intervention_id,
             teacher_id=user.id,
+            resume_operation_id=body.operation_id,
             expected_state_version=body.expected_state_version,
             response=body.response,
             allow_l2=body.allow_l2,
         )
-        resume_status = "resumed"
-    return {"id": item.id, "status": item.status, "allow_l2": item.allow_l2, "graph": resume_status}
+    except BusinessRuleError as exc:
+        raise fail(exc) from exc
+    except Exception as exc:
+        raise HTTPException(503, "graph_resume_failed") from exc
+    session.expire_all()
+    item = await session.get(Intervention, intervention_id)
+    if item is None:
+        raise HTTPException(404, "intervention_not_found")
+    return {"id": item.id, "status": item.status, "allow_l2": item.allow_l2, "graph": "resumed"}
 
 
 @router.get("/attempts/{attempt_id}/events")

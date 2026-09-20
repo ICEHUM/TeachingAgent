@@ -11,6 +11,9 @@ END $$;
 CREATE SCHEMA IF NOT EXISTS teaching_business;
 CREATE SCHEMA IF NOT EXISTS langgraph_checkpoint;
 
+REVOKE ALL ON SCHEMA teaching_business FROM PUBLIC;
+REVOKE ALL ON SCHEMA langgraph_checkpoint FROM PUBLIC;
+
 ALTER ROLE teaching_app SET search_path = teaching_business, public;
 ALTER ROLE langgraph_cp SET search_path = langgraph_checkpoint, public;
 
