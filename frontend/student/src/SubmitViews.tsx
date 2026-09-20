@@ -60,9 +60,9 @@ export function SubmitViews({
   return <div className="eval-shell">
     <div className="eval-toolbar">
       <button className="button quiet" onClick={onBack}>返回工作台</button>
-      <div>
+      <div className="eval-toolbar-copy">
         <strong>{recap ? "学习复盘" : "确认提交"}</strong>
-        <p>评价针对 {data.submission.snapshot_label}，后续编辑不会改写本次提交。</p>
+        <p><span>评价针对</span><span className="snapshot-chip">{data.submission.snapshot_label}</span><span>后续编辑不会改写本次提交</span></p>
       </div>
       {!recap && <button className="button primary" onClick={() => void submit()} disabled={busy || !data.submission.snapshot_id}>{busy ? "提交中…" : "确认提交当前 Snapshot"}</button>}
       {recap && data.formal_grade && <span className="status-badge completed">教师已确认 {data.formal_grade.total_score}/{data.formal_grade.max_score}</span>}
@@ -94,17 +94,17 @@ export function SubmitViews({
           <h2>自动检查 / AI 建议 / 教师确认</h2>
           <p>三栏分开。AI 建议不会自动变成正式分数。</p>
         </section>
-        {data.rubric.map((item) => <article key={item.key} className="rubric-card">
-          <header><h3>{item.title}</h3><small>{item.max_score} 分</small></header>
-          <dl>
-            <div><dt>自动检查</dt><dd>{item.auto.summary}</dd></div>
-            <div><dt>AI 建议</dt><dd>{item.ai.text}</dd></div>
-            <div><dt>教师确认</dt><dd>{item.teacher.status === "confirmed" && item.teacher.score != null ? `${item.teacher.score} 分 · ${item.teacher.reason}` : "待评价"}</dd></div>
+        {data.rubric.map((item) => { const confirmed = item.teacher.status === "confirmed" && item.teacher.score != null; return <article key={item.key} className={`rubric-card ${confirmed ? "confirmed" : "pending"}`}>
+          <header><h3>{item.title}</h3><div className="rubric-meta"><span className={`review-state ${confirmed ? "confirmed" : "pending"}`}>{confirmed ? "教师已确认" : "待评价"}</span><small>{item.max_score} 分</small></div></header>
+          <dl className="review-lanes">
+            <div className="review-lane auto"><dt>自动检查</dt><dd>{item.auto.summary}</dd></div>
+            <div className="review-lane ai"><dt>AI 建议</dt><dd>{item.ai.text}</dd></div>
+            <div className="review-lane teacher"><dt>教师确认</dt><dd>{confirmed ? `${item.teacher.score} 分 · ${item.teacher.reason}` : "待评价"}</dd></div>
           </dl>
-        </article>)}
+        </article>; })}
         <section className="eval-grade">
           <h3>正式成绩</h3>
-          {data.formal_grade ? <p>教师已发布 {data.formal_grade.total_score} / {data.formal_grade.max_score}。</p> : <p>尚未发布。未填项保持待评价，不会用 0 或满分占位。</p>}
+          {data.formal_grade ? <p><strong className="grade-value">{data.formal_grade.total_score}<small> / {data.formal_grade.max_score}</small></strong><span>教师已发布</span></p> : <p>尚未发布。未填项保持待评价，不会用 0 或满分占位。</p>}
         </section>
       </aside>
     </div>

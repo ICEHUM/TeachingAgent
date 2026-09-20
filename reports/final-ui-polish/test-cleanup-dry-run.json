@@ -1,0 +1,41 @@
+{
+  "environment": "TEST",
+  "mode": "dry-run",
+  "loopback_host": "127.0.0.1",
+  "include_legacy_stage05b": true,
+  "candidate_attempt_ids": [
+    "0f7e3f4f-b83f-4c0b-ba9a-93326477eeda",
+    "143cc20e-e2ac-4eac-aaf5-838696b50da6",
+    "367d3330-f896-4c0e-8c25-14f7581c15d5",
+    "47984d29-6b8f-4bbc-aae0-3c9c4af6b51f",
+    "7bef6b81-9fe4-4dac-bc7f-2fe5a5e829a4",
+    "97cde631-269c-4eea-afb4-eced0d085137",
+    "c201e695-a173-463e-866a-1b28cbefcaac",
+    "e8f28b77-f481-4cd5-b963-1099ec5ef7fa",
+    "fa717f27-e5ef-4d26-ac01-bd27b360f781"
+  ],
+  "counts_before": {
+    "attempts": 9,
+    "snapshots": 27,
+    "submissions": 9,
+    "requirement_results": 43,
+    "teaching_events": 0,
+    "interventions": 0,
+    "reviews": 5,
+    "review_items": 20,
+    "formal_grades": 5
+  },
+  "counts_after": {
+    "attempts": 9,
+    "snapshots": 27,
+    "submissions": 9,
+    "requirement_results": 43,
+    "teaching_events": 0,
+    "interventions": 0,
+    "reviews": 5,
+    "review_items": 20,
+    "formal_grades": 5
+  },
+  "removed_workspace_paths": [],
+  "passed": true
+}

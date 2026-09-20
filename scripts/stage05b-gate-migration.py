@@ -1,4 +1,4 @@
-"""Idempotently verify revision 0004 against the existing non-empty PostgreSQL database."""
+"""Idempotently verify the current head against the existing non-empty PostgreSQL database."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from app.business.checkpoint import checkpoint_saver
 
 OLD_ATTEMPT = "ef885ba8-cd80-4946-a7a0-65c23f303039"
 OLD_INTERVENTION = "5aa75d37-349d-4ae7-ada8-dbdbea6a5287"
-TARGET_REVISION = "20260920_0004"
+TARGET_REVISION = "20260921_0005"
 
 
 def database_info() -> dict:
@@ -62,6 +62,11 @@ def business_facts(url: str) -> dict:
         revision = connection.execute(text(
             "SELECT version_num FROM teaching_business.alembic_version"
         )).scalar_one()
+        rubric_titles = list(connection.execute(text("""
+            SELECT title FROM teaching_business.rubric_definitions
+            WHERE item_key = 'delivery_collab'
+            ORDER BY task_version_id
+        """)).scalars())
         privileges = {
             table: bool(connection.execute(text(
                 "SELECT has_table_privilege('teaching_app', :table, 'SELECT,INSERT,UPDATE,DELETE')"
@@ -71,6 +76,7 @@ def business_facts(url: str) -> dict:
     engine.dispose()
     return {
         "revision": revision,
+        "delivery_rubric_titles": rubric_titles,
         "counts": counts,
         "old_attempt": dict(attempt),
         "old_intervention": dict(intervention),
@@ -148,7 +154,9 @@ async def main() -> None:
         "alembic_stderr": completed.stderr.strip(),
         "before": before,
         "after": after,
-        "business_facts_unchanged": before == after,
+        "business_counts_unchanged": before["counts"] == after["counts"],
+        "existing_attempt_unchanged": before["old_attempt"] == after["old_attempt"],
+        "existing_intervention_unchanged": before["old_intervention"] == after["old_intervention"],
         "checkpoint_before": checkpoint_before,
         "checkpoint_after": checkpoint_after,
         "checkpoint_restored": restored,
@@ -156,13 +164,18 @@ async def main() -> None:
     report["passed"] = bool(
         completed.returncode == 0
         and after["revision"] == TARGET_REVISION
-        and report["business_facts_unchanged"]
+        and report["business_counts_unchanged"]
+        and report["existing_attempt_unchanged"]
+        and report["existing_intervention_unchanged"]
+        and bool(after["delivery_rubric_titles"])
+        and set(after["delivery_rubric_titles"]) == {"工程规范与可复现性"}
         and all(after["teaching_app_crud"].values())
         and checkpoint_before == checkpoint_after
         and restored.get("restored")
         and restored.get("has_channel_values")
     )
-    output = ROOT / "reports" / "stage05b-gate-migration.json"
+    output = ROOT / "reports" / "final-ui-polish" / "migration.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
     if not report["passed"]:

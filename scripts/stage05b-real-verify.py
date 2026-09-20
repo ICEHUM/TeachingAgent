@@ -20,7 +20,7 @@ sys.path.insert(0, str(BACKEND))
 
 from app.agent.workspace import AttemptWorkspaceManager
 from app.business.database import create_business_engine, create_session_factory
-from app.business.models import Attempt, RequirementDefinition, TaskStage
+from app.business.models import Attempt, OperationLedger, RequirementDefinition, TaskStage
 from app.business.service import BusinessService
 
 CONTEXT = json.loads((ROOT / ".runtime" / "stage05a-context.json").read_text(encoding="utf-8"))
@@ -69,6 +69,13 @@ async def prepare_attempt(database_url: str) -> dict:
         )
         stage = await session.scalar(select_stage(original.task_version_id, "implement_retrieval"))
         attempt.current_stage_id = stage.id
+        session.add(OperationLedger(
+            scope=f"test-data:{attempt.id}",
+            operation_id="stage05b:gate-e2e",
+            status="COMPLETED",
+            result_ref=f"attempt:{attempt.id}",
+            result_payload={"source": "stage05b-gate-e2e"},
+        ))
         await session.commit()
         attempt_id = attempt.id
         task_version_id = original.task_version_id

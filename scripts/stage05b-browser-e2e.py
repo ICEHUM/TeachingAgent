@@ -12,7 +12,7 @@ from playwright.sync_api import Page, sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "reports" / "stage05b-screenshots"
+OUT = Path(os.getenv("UI_REPORT_DIR", ROOT / "reports" / "stage05b-screenshots"))
 OUT.mkdir(parents=True, exist_ok=True)
 VIEWPORTS = [("1440x900", 1440, 900), ("1366x768", 1366, 768), ("1280x800", 1280, 800), ("390x844", 390, 844)]
 API = "http://127.0.0.1:8000"
@@ -25,6 +25,47 @@ def viewport_health(page: Page) -> dict:
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth,
       bodyText: document.body.innerText.slice(0, 5000)
     })""")
+
+
+def accessibility_health(page: Page) -> dict:
+    return page.evaluate("""() => {
+      const controls = [...document.querySelectorAll('button, a, input, textarea, select')]
+        .filter((node) => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return !node.disabled && node.getAttribute('aria-hidden') !== 'true'
+            && rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden';
+        });
+      const unnamed = controls.filter((node) => {
+        const labels = node.labels ? [...node.labels].map((label) => label.innerText).join(' ') : '';
+        return !(node.getAttribute('aria-label') || labels || node.innerText || node.getAttribute('title'))?.trim();
+      });
+      const tiny = [...document.querySelectorAll('body *')].filter((node) => {
+        const style = getComputedStyle(node);
+        return node.children.length === 0 && node.textContent.trim() && parseFloat(style.fontSize) < 12;
+      });
+      return { interactiveControls: controls.length, unnamedControls: unnamed.length, textBelow12px: tiny.length };
+    }""")
+
+
+def keyboard_focus_path(page: Page, steps: int = 8) -> list[dict]:
+    page.locator("body").press("Home")
+    path: list[dict] = []
+    for _ in range(steps):
+        page.keyboard.press("Tab")
+        item = page.evaluate("""() => {
+          const node = document.activeElement;
+          if (!node) return null;
+          const style = getComputedStyle(node);
+          return {
+            tag: node.tagName,
+            name: (node.getAttribute('aria-label') || node.innerText || node.getAttribute('placeholder') || '').trim().slice(0, 80),
+            visibleFocus: style.outlineStyle !== 'none' || style.boxShadow !== 'none'
+          };
+        }""")
+        if item and item["tag"] != "BODY":
+            path.append(item)
+    return path
 
 
 def open_teacher_review(page: Page, teacher_url: str, *, completed: bool) -> None:
@@ -91,6 +132,9 @@ def main() -> None:
             page.screenshot(path=str(OUT / f"student-submit-{label}.png"), full_page=False)
             health = viewport_health(page)
             notes.append({"page": "student-submit", "viewport": label, **{k: v for k, v in health.items() if k != "bodyText"}})
+            if label == "1440x900":
+                notes[-1]["accessibility"] = accessibility_health(page)
+                notes[-1]["keyboardPath"] = keyboard_focus_path(page)
             page.close()
 
         student = browser.new_page(viewport={"width": 1440, "height": 900})
@@ -123,6 +167,9 @@ def main() -> None:
         print("browser-e2e: teacher opened frozen submission", flush=True)
         review_text = teacher.locator("body").inner_text()
         assert "Snapshot B" in review_text and "作品评价" in review_text
+        assert "工程规范与可复现性" in review_text
+        assert review_text.count("待评价") >= 4
+        teacher.screenshot(path=str(OUT / "teacher-review-pending-1440x900.png"), full_page=False)
         while teacher.get_by_role("button", name="确认本项").count():
             teacher.get_by_role("button", name="确认本项").first.click()
             teacher.wait_for_timeout(250)
@@ -168,6 +215,9 @@ def main() -> None:
                 "snapshot_b": "Snapshot B" in recap_text,
                 **{k: v for k, v in health.items() if k != "bodyText"},
             })
+            if label == "1440x900":
+                notes[-1]["accessibility"] = accessibility_health(recap)
+                notes[-1]["keyboardPath"] = keyboard_focus_path(recap)
             recap.close()
 
             review = browser.new_page(viewport={"width": width, "height": height})
@@ -182,6 +232,9 @@ def main() -> None:
                 "published_95": "已发布 95/100" in review_text,
                 **{k: v for k, v in health.items() if k != "bodyText"},
             })
+            if label == "1440x900":
+                notes[-1]["accessibility"] = accessibility_health(review)
+                notes[-1]["keyboardPath"] = keyboard_focus_path(review)
             review.close()
         student.close()
         teacher.close()
@@ -205,7 +258,13 @@ def main() -> None:
         ],
         "formal_grade": {"total_score": 95, "max_score": 100},
         "viewports": notes,
-        "passed": all(not item.get("horizontalOverflow", False) for item in notes),
+        "passed": all(
+            not item.get("horizontalOverflow", False)
+            and item.get("accessibility", {}).get("unnamedControls", 0) == 0
+            and item.get("accessibility", {}).get("textBelow12px", 0) == 0
+            and all(step["visibleFocus"] for step in item.get("keyboardPath", []))
+            for item in notes
+        ),
     }
     (ROOT / ".runtime" / "stage05b-context.json").write_text(json.dumps({
         "attempt_id": context["attempt_id"],
@@ -215,7 +274,7 @@ def main() -> None:
         "snapshot_b": context["snapshot_b"],
         "snapshot_c": context["snapshot_c"],
     }, indent=2), encoding="utf-8")
-    (ROOT / "reports" / "stage05b-browser-e2e.json").write_text(
+    (OUT / "browser-e2e.json").write_text(
         json.dumps(browser_report, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(json.dumps(browser_report, ensure_ascii=True, indent=2))

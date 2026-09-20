@@ -1,0 +1,53 @@
+{
+  "environment": "TEST",
+  "mode": "apply",
+  "loopback_host": "127.0.0.1",
+  "include_legacy_stage05b": true,
+  "candidate_attempt_ids": [
+    "0f7e3f4f-b83f-4c0b-ba9a-93326477eeda",
+    "143cc20e-e2ac-4eac-aaf5-838696b50da6",
+    "367d3330-f896-4c0e-8c25-14f7581c15d5",
+    "47984d29-6b8f-4bbc-aae0-3c9c4af6b51f",
+    "55b2a7f6-abf3-450e-bad2-ce58856ed278",
+    "7bef6b81-9fe4-4dac-bc7f-2fe5a5e829a4",
+    "97cde631-269c-4eea-afb4-eced0d085137",
+    "c201e695-a173-463e-866a-1b28cbefcaac",
+    "e8f28b77-f481-4cd5-b963-1099ec5ef7fa",
+    "fa717f27-e5ef-4d26-ac01-bd27b360f781"
+  ],
+  "counts_before": {
+    "attempts": 10,
+    "snapshots": 30,
+    "submissions": 10,
+    "requirement_results": 49,
+    "teaching_events": 0,
+    "interventions": 0,
+    "reviews": 6,
+    "review_items": 24,
+    "formal_grades": 6
+  },
+  "counts_after": {
+    "attempts": 0,
+    "snapshots": 0,
+    "submissions": 0,
+    "requirement_results": 0,
+    "teaching_events": 0,
+    "interventions": 0,
+    "reviews": 0,
+    "review_items": 0,
+    "formal_grades": 0
+  },
+  "removed_workspace_paths": [
+    "workspaces\\attempts\\attempt-9e9c2a3f437f6302c789db18",
+    "workspaces\\attempts\\attempt-09e41535ad6bff25a72f1ee0",
+    "workspaces\\attempts\\attempt-8d306172d5d3e55b117694d6",
+    "workspaces\\attempts\\attempt-f6097500fa5ed374bce7203c",
+    "workspaces\\attempts\\attempt-f50260021a86adbb37c673f4",
+    "workspaces\\attempts\\attempt-49d2052bc4bb30363bee135a",
+    "workspaces\\attempts\\attempt-38716fe9813ef263bc1d07e8",
+    "workspaces\\attempts\\attempt-d1067d995a7ee619f094f0c3",
+    "workspaces\\attempts\\attempt-277694e97d5c5f9228ae0161",
+    "workspaces\\attempts\\attempt-4f730e4403950d978aa7e425"
+  ],
+  "passed": true
+}

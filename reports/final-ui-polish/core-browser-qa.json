@@ -1,0 +1,384 @@
+{
+  "viewports": [
+    {
+      "page": "student-workbench",
+      "viewport": [
+        1440,
+        900
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 17,
+      "unnamedControls": 0,
+      "textBelow12px": 0,
+      "keyboardPath": [
+        {
+          "tag": "BUTTON",
+          "name": "提交",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "收起任务",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "×\n已知问题能够命中",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "✓\n已提交调试观察",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "创建 Snapshot",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "JSON\ndata/faq.json",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "PY\nfaq_app.py",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "MD\nREADME.md",
+          "visibleFocus": true
+        },
+        {
+          "tag": "DIV",
+          "name": "faq_app.py 代码编辑器",
+          "visibleFocus": true
+        },
+        {
+          "tag": "DIV",
+          "name": "faq_app.py 代码编辑器",
+          "visibleFocus": true
+        }
+      ]
+    },
+    {
+      "page": "evidence-drawer",
+      "viewport": [
+        1440,
+        900
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 20,
+      "unnamedControls": 0,
+      "textBelow12px": 0,
+      "keyboardPath": [
+        {
+          "tag": "BUTTON",
+          "name": "提交",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "收起任务",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "×\n已知问题能够命中",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "✓\n已提交调试观察",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "保存 Ctrl S",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "创建 Snapshot",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "JSON\ndata/faq.json",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "PY\nfaq_app.py",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "MD\nREADME.md",
+          "visibleFocus": true
+        },
+        {
+          "tag": "DIV",
+          "name": "faq_app.py 代码编辑器",
+          "visibleFocus": true
+        }
+      ]
+    },
+    {
+      "page": "teacher-classroom",
+      "viewport": [
+        1440,
+        900
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 9,
+      "unnamedControls": 0,
+      "textBelow12px": 0,
+      "keyboardPath": [
+        {
+          "tag": "BUTTON",
+          "name": "刷新数据",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "需要关注\n1",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "进行中\n2",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "已完成\n0",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "周\n周宁\n实现检索\n当前情况\n连续检查未通过\n4\n失败\n局部示例\n已有帮助\n4 小时\n等待\n等待教师\n›",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "概览",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "证据\n1/2",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "轨迹\n7",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "介入操作\n待教师处理\n展开",
+          "visibleFocus": true
+        }
+      ]
+    },
+    {
+      "page": "intervention-panel",
+      "viewport": [
+        1440,
+        900
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 14,
+      "unnamedControls": 0,
+      "textBelow12px": 0,
+      "keyboardPath": [
+        {
+          "tag": "BUTTON",
+          "name": "刷新数据",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "需要关注\n1",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "进行中\n2",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "已完成\n0",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "周\n周宁\n实现检索\n当前情况\n连续检查未通过\n4\n失败\n局部示例\n已有帮助\n4 小时\n等待\n等待教师\n›",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "概览",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "证据\n1/2",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "轨迹\n7",
+          "visibleFocus": true
+        },
+        {
+          "tag": "DIV",
+          "name": "当前阶段\n实现检索\n\n让已知问题命中资料，同时让未知问题保持无结果。\n\n1 / 2\n验收项已满足\n学生观察\n最近一次提交\n资料文件能够正常加载；已知问题应命中密",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "介入操作\n待教师处理\n收起",
+          "visibleFocus": true
+        }
+      ]
+    },
+    {
+      "page": "student-workbench",
+      "viewport": [
+        1366,
+        768
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 17,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "evidence-drawer",
+      "viewport": [
+        1366,
+        768
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 19,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "teacher-classroom",
+      "viewport": [
+        1366,
+        768
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 9,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "intervention-panel",
+      "viewport": [
+        1366,
+        768
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 14,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "student-workbench",
+      "viewport": [
+        1280,
+        800
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 17,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "evidence-drawer",
+      "viewport": [
+        1280,
+        800
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 19,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "teacher-classroom",
+      "viewport": [
+        1280,
+        800
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 9,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "intervention-panel",
+      "viewport": [
+        1280,
+        800
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 14,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "student-workbench",
+      "viewport": [
+        390,
+        844
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 12,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "evidence-drawer",
+      "viewport": [
+        390,
+        844
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 14,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "teacher-classroom",
+      "viewport": [
+        390,
+        844
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 5,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    },
+    {
+      "page": "intervention-panel",
+      "viewport": [
+        390,
+        844
+      ],
+      "horizontalOverflow": false,
+      "interactiveControls": 16,
+      "unnamedControls": 0,
+      "textBelow12px": 0
+    }
+  ],
+  "passed": true
+}

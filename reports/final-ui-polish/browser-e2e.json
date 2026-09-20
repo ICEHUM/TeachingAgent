@@ -1,0 +1,273 @@
+{
+  "attempt_id": "55b2a7f6-abf3-450e-bad2-ce58856ed278",
+  "submission_id": "c578cd72-db63-42df-9898-764acc839c89",
+  "snapshot_b": "9b8e4c83-cd99-4933-923c-714e30cf15c0",
+  "snapshot_c": "f9707bb3-0459-4467-9357-18a85c98aa4a",
+  "submission_frozen_to_b": true,
+  "browser_actions": [
+    "student_confirmed_submission",
+    "student_continued_to_snapshot_c",
+    "teacher_opened_review",
+    "teacher_confirmed_teacher_review_requirements",
+    "teacher_completed_four_rubric_items_with_reasons",
+    "teacher_published_formal_grade",
+    "student_opened_recap"
+  ],
+  "formal_grade": {
+    "total_score": 95,
+    "max_score": 100
+  },
+  "viewports": [
+    {
+      "page": "student-submit",
+      "viewport": [
+        1440,
+        900
+      ],
+      "scrollWidth": 1440,
+      "horizontalOverflow": false,
+      "accessibility": {
+        "interactiveControls": 3,
+        "unnamedControls": 0,
+        "textBelow12px": 0
+      },
+      "keyboardPath": [
+        {
+          "tag": "BUTTON",
+          "name": "提交",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "返回工作台",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "确认提交当前 Snapshot",
+          "visibleFocus": true
+        },
+        {
+          "tag": "SECTION",
+          "name": "提交作品与证据",
+          "visibleFocus": true
+        },
+        {
+          "tag": "ASIDE",
+          "name": "复盘与成绩状态",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "提交",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "返回工作台",
+          "visibleFocus": true
+        }
+      ]
+    },
+    {
+      "page": "student-submit",
+      "viewport": [
+        1366,
+        768
+      ],
+      "scrollWidth": 1366,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-submit",
+      "viewport": [
+        1280,
+        800
+      ],
+      "scrollWidth": 1280,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-submit",
+      "viewport": [
+        390,
+        844
+      ],
+      "scrollWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-recap",
+      "viewport": [
+        1440,
+        900
+      ],
+      "has_three_lanes": true,
+      "snapshot_b": true,
+      "scrollWidth": 1440,
+      "horizontalOverflow": false,
+      "accessibility": {
+        "interactiveControls": 2,
+        "unnamedControls": 0,
+        "textBelow12px": 0
+      },
+      "keyboardPath": [
+        {
+          "tag": "BUTTON",
+          "name": "查看提交",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "返回工作台",
+          "visibleFocus": true
+        },
+        {
+          "tag": "SECTION",
+          "name": "提交作品与证据",
+          "visibleFocus": true
+        },
+        {
+          "tag": "ASIDE",
+          "name": "复盘与成绩状态",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "查看提交",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "返回工作台",
+          "visibleFocus": true
+        },
+        {
+          "tag": "SECTION",
+          "name": "提交作品与证据",
+          "visibleFocus": true
+        }
+      ]
+    },
+    {
+      "page": "teacher-review",
+      "viewport": [
+        1440,
+        900
+      ],
+      "snapshot_b": true,
+      "published_95": true,
+      "scrollWidth": 1440,
+      "horizontalOverflow": false,
+      "accessibility": {
+        "interactiveControls": 4,
+        "unnamedControls": 0,
+        "textBelow12px": 0
+      },
+      "keyboardPath": [
+        {
+          "tag": "BUTTON",
+          "name": "返回课堂台",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "data/faq.json",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "faq_app.py",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "README.md",
+          "visibleFocus": true
+        },
+        {
+          "tag": "ASIDE",
+          "name": "量规\n\n自动检查、AI 建议和教师确认分开。未确认项保持待评价。\n\n功能与边界测试\n已确认\n40 分\n自动检查\n相关自动检查均已满足。\nAI 建议\n「功能与边界",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "返回课堂台",
+          "visibleFocus": true
+        },
+        {
+          "tag": "BUTTON",
+          "name": "data/faq.json",
+          "visibleFocus": true
+        }
+      ]
+    },
+    {
+      "page": "student-recap",
+      "viewport": [
+        1366,
+        768
+      ],
+      "has_three_lanes": true,
+      "snapshot_b": true,
+      "scrollWidth": 1366,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "teacher-review",
+      "viewport": [
+        1366,
+        768
+      ],
+      "snapshot_b": true,
+      "published_95": true,
+      "scrollWidth": 1366,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-recap",
+      "viewport": [
+        1280,
+        800
+      ],
+      "has_three_lanes": true,
+      "snapshot_b": true,
+      "scrollWidth": 1280,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "teacher-review",
+      "viewport": [
+        1280,
+        800
+      ],
+      "snapshot_b": true,
+      "published_95": true,
+      "scrollWidth": 1280,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "student-recap",
+      "viewport": [
+        390,
+        844
+      ],
+      "has_three_lanes": true,
+      "snapshot_b": true,
+      "scrollWidth": 390,
+      "horizontalOverflow": false
+    },
+    {
+      "page": "teacher-review",
+      "viewport": [
+        390,
+        844
+      ],
+      "snapshot_b": true,
+      "published_95": true,
+      "scrollWidth": 390,
+      "horizontalOverflow": false
+    }
+  ],
+  "passed": true
+}

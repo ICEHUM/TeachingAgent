@@ -115,9 +115,9 @@ export function ReviewView({ userId, submissionId, onBack }: { userId: string; s
   return <div className="eval-shell">
     <div className="eval-toolbar">
       <button className="refresh" onClick={onBack}>返回课堂台</button>
-      <div>
+      <div className="eval-toolbar-copy">
         <strong>作品评价 · {data.student.display_name}</strong>
-        <p>{data.submission.snapshot_label} · {data.attempt.stage}</p>
+        <p><span className="snapshot-chip">{data.submission.snapshot_label}</span><span>{data.attempt.stage}</span><span>Submission #{data.submission.sequence}</span></p>
       </div>
       {data.formal_grade ? <span className="status-badge completed">已发布 {data.formal_grade.total_score}/{data.formal_grade.max_score}</span> : <span className="status-badge waiting">待评价 {missing.length} 项</span>}
     </div>
@@ -155,19 +155,23 @@ export function ReviewView({ userId, submissionId, onBack }: { userId: string; s
         </section>
         {data.rubric.map((item) => {
           const current = draft.find((entry) => entry.key === item.key) || { key: item.key, score: "", reason: "", confirmed: false };
-          return <article key={item.key} className="rubric-card">
-            <header><h3>{item.title}</h3><small>{item.max_score} 分</small></header>
-            <dl>
-              <div><dt>自动检查</dt><dd>{item.auto.summary}</dd></div>
-              <div><dt>AI 建议</dt><dd>{item.ai.text}</dd></div>
+          const confirmed = current.confirmed && current.score !== "";
+          return <article key={item.key} className={`rubric-card ${confirmed ? "confirmed" : "pending"}`}>
+            <header><h3>{item.title}</h3><div className="rubric-meta"><span className={`review-state ${confirmed ? "confirmed" : "pending"}`}>{confirmed ? "已确认" : "待评价"}</span><small>{item.max_score} 分</small></div></header>
+            <dl className="review-lanes">
+              <div className="review-lane auto"><dt>自动检查</dt><dd>{item.auto.summary}</dd></div>
+              <div className="review-lane ai"><dt>AI 建议</dt><dd>{item.ai.text}</dd></div>
             </dl>
-            <label>教师确认分值
-              <input type="number" min={0} max={item.max_score} value={current.score} disabled={published} placeholder="待评价" onChange={(event) => update(item.key, { score: event.target.value, confirmed: event.target.value !== "" })} />
-            </label>
-            <label>理由
-              <textarea rows={2} value={current.reason} disabled={published} onChange={(event) => update(item.key, { reason: event.target.value })} placeholder="说明依据的 Snapshot 与证据。" />
-            </label>
-            <label className="confirm-row"><input type="checkbox" checked={current.confirmed && current.score !== ""} disabled={published || current.score === ""} onChange={(event) => update(item.key, { confirmed: event.target.checked })} />已依据证据确认本项</label>
+            <div className="teacher-confirmation">
+              <div className="teacher-confirmation-heading"><strong>教师确认</strong><span>正式成绩依据</span></div>
+              <label>确认分值
+                <input aria-label={`${item.title}确认分值`} inputMode="numeric" type="number" min={0} max={item.max_score} value={current.score} disabled={published} placeholder="待评价" onChange={(event) => update(item.key, { score: event.target.value, confirmed: event.target.value !== "" })} />
+              </label>
+              <label>评价理由
+                <textarea rows={2} value={current.reason} disabled={published} onChange={(event) => update(item.key, { reason: event.target.value })} placeholder="说明依据的 Snapshot 与证据。" />
+              </label>
+              <label className="confirm-row"><input type="checkbox" checked={confirmed} disabled={published || current.score === ""} onChange={(event) => update(item.key, { confirmed: event.target.checked })} />已依据证据确认本项</label>
+            </div>
           </article>;
         })}
         <div className="eval-actions">

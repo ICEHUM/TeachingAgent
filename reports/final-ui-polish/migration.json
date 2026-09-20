@@ -1,0 +1,122 @@
+{
+  "container": "teachingagent-postgres-02b",
+  "host": "127.0.0.1",
+  "port": 59453,
+  "target_revision": "20260921_0005",
+  "alembic_exit": 0,
+  "alembic_stdout": "",
+  "alembic_stderr": "INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.\nINFO  [alembic.runtime.migration] Will assume transactional DDL.",
+  "before": {
+    "revision": "20260921_0005",
+    "delivery_rubric_titles": [
+      "工程规范与可复现性"
+    ],
+    "counts": {
+      "attempts": 27,
+      "snapshots": 28,
+      "requirement_results": 39,
+      "teaching_events": 64,
+      "interventions": 7,
+      "submissions": 0,
+      "formal_grades": 0
+    },
+    "old_attempt": {
+      "id": "ef885ba8-cd80-4946-a7a0-65c23f303039",
+      "state_version": 11,
+      "status": "active",
+      "snapshots": 4,
+      "requirement_results": 5,
+      "teaching_events": 11
+    },
+    "old_intervention": {
+      "id": "5aa75d37-349d-4ae7-ada8-dbdbea6a5287",
+      "attempt_id": "69fdcd0e-580d-47fb-9e6a-3492bbde113f",
+      "status": "RESOLVED",
+      "allow_l2": true,
+      "requested_state_version": 5
+    },
+    "teaching_app_crud": {
+      "submissions": true,
+      "reviews": true,
+      "review_items": true,
+      "formal_grades": true,
+      "rubric_definitions": true
+    }
+  },
+  "after": {
+    "revision": "20260921_0005",
+    "delivery_rubric_titles": [
+      "工程规范与可复现性"
+    ],
+    "counts": {
+      "attempts": 27,
+      "snapshots": 28,
+      "requirement_results": 39,
+      "teaching_events": 64,
+      "interventions": 7,
+      "submissions": 0,
+      "formal_grades": 0
+    },
+    "old_attempt": {
+      "id": "ef885ba8-cd80-4946-a7a0-65c23f303039",
+      "state_version": 11,
+      "status": "active",
+      "snapshots": 4,
+      "requirement_results": 5,
+      "teaching_events": 11
+    },
+    "old_intervention": {
+      "id": "5aa75d37-349d-4ae7-ada8-dbdbea6a5287",
+      "attempt_id": "69fdcd0e-580d-47fb-9e6a-3492bbde113f",
+      "status": "RESOLVED",
+      "allow_l2": true,
+      "requested_state_version": 5
+    },
+    "teaching_app_crud": {
+      "submissions": true,
+      "reviews": true,
+      "review_items": true,
+      "formal_grades": true,
+      "rubric_definitions": true
+    }
+  },
+  "business_counts_unchanged": true,
+  "existing_attempt_unchanged": true,
+  "existing_intervention_unchanged": true,
+  "checkpoint_before": {
+    "tables": [
+      "checkpoint_blobs",
+      "checkpoint_migrations",
+      "checkpoint_writes",
+      "checkpoints"
+    ],
+    "count": 807,
+    "latest": {
+      "thread_id": "attempt:69fdcd0e-580d-47fb-9e6a-3492bbde113f:faq-001-v1",
+      "checkpoint_ns": "",
+      "checkpoint_id": "1f1b4f1b-cb3f-6c85-805c-0e302f5361e5"
+    }
+  },
+  "checkpoint_after": {
+    "tables": [
+      "checkpoint_blobs",
+      "checkpoint_migrations",
+      "checkpoint_writes",
+      "checkpoints"
+    ],
+    "count": 807,
+    "latest": {
+      "thread_id": "attempt:69fdcd0e-580d-47fb-9e6a-3492bbde113f:faq-001-v1",
+      "checkpoint_ns": "",
+      "checkpoint_id": "1f1b4f1b-cb3f-6c85-805c-0e302f5361e5"
+    }
+  },
+  "checkpoint_restored": {
+    "restored": true,
+    "thread_id": "attempt:69fdcd0e-580d-47fb-9e6a-3492bbde113f:faq-001-v1",
+    "checkpoint_id": "1f1b4f1b-cb3f-6c85-805c-0e302f5361e5",
+    "has_channel_values": true,
+    "checkpoint_version": 4
+  },
+  "passed": true
+}

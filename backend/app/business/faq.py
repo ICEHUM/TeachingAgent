@@ -44,7 +44,7 @@ FAQ_RUBRIC = (
         "citation_static_check",
         "boundary_transfer",
     )),
-    ("delivery_collab", "规范与协作", 15, (
+    ("delivery_collab", "工程规范与可复现性", 15, (
         "source_quality_review",
         "delivery_static_check",
         "delivery_review",

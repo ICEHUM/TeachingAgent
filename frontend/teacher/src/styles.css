@@ -511,3 +511,94 @@ blockquote { padding: 12px 14px; border-left-width: 1px; background: #f7f9fd; fo
 .eval-actions .primary, .eval-actions .refresh { min-height: 36px; padding: 0 12px; }
 .eval-loading, .eval-empty { display: grid; place-items: center; min-height: 40vh; gap: var(--space-3); color: var(--text-secondary); }
 @media (max-width: 1024px) { .eval-layout { grid-template-columns: 1fr; } .eval-side { border-left: 0; border-top: 1px solid var(--border); } }
+
+/* Final UI Polish: calm classroom triage and explicit human review states. */
+.teacher-app small { font-size: 12px; }
+.refresh, .primary, .action-grid button {
+  min-height: var(--control-height);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-control);
+  font-size: 13px;
+}
+.primary { border-color: var(--accent); background: var(--accent); color: #fff; }
+.refresh:hover:not(:disabled), .action-grid button:hover:not(:disabled) { border-color: #aeb8c7; background: #f7f9fc; }
+.status-badge { min-height: 28px; padding: 4px 8px; border-radius: var(--radius-control); font-size: var(--text-meta); }
+.status-badge.waiting { border-color: var(--status-warning-border); background: var(--status-warning-bg); color: #765500; }
+.status-badge.progress { border-color: var(--status-info-border); background: var(--status-info-bg); color: var(--status-info-text); }
+.status-badge.completed, .status-badge.resolved { border-color: var(--status-success-border); background: var(--status-success-bg); color: var(--success); }
+.status-badge.failed { border-color: var(--status-danger-border); background: var(--status-danger-bg); color: var(--danger); }
+.snapshot-chip { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 7px; border: 1px solid #d6deeb; border-radius: 5px; background: #f6f8fc; color: #2e4c7f; font: 650 12px var(--font-mono); white-space: nowrap; }
+
+.student-list { align-content: start; }
+.queue-note { margin: 8px 4px 0; padding: 16px 12px 4px; border-top: 1px solid #e3e7ed; color: var(--text-muted); }
+.queue-note strong { display: block; color: var(--text-secondary); font-size: 13px; font-weight: 650; }
+.queue-note span { display: block; max-width: 42ch; margin-top: 4px; font-size: 12px; line-height: 1.6; }
+.student-row { box-shadow: none; }
+.student-row:hover { box-shadow: var(--shadow-control); }
+.group-tabs button, .detail-tabs button { min-height: 40px; }
+.teacher-actions textarea, .rubric-card input[type="number"], .rubric-card textarea { border-color: var(--border-strong); box-shadow: inset 0 1px 2px rgb(17 24 39 / .025); font-size: 13px; }
+.action-grid button { font-size: 13px; }
+
+.eval-toolbar { min-height: 64px; gap: 14px; padding: 8px 16px; }
+.eval-toolbar-copy { min-width: 0; }
+.eval-toolbar-copy > strong { display: block; font-size: 15px; line-height: 1.35; }
+.eval-toolbar-copy p { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.eval-layout { grid-template-columns: minmax(0,1fr) 420px; }
+.eval-main { padding: 18px 20px 28px; }
+.eval-side { padding: 18px 20px 28px; }
+.eval-block { margin-bottom: 20px; padding-bottom: 20px; }
+.eval-block h2, .eval-side h2, .eval-side h3, .rubric-card h3 { font-size: 15px; line-height: 1.4; }
+.eval-block header > span { color: var(--text-muted); font-size: 12px; }
+.eval-files { min-height: 240px; border-color: #d9dee7; border-radius: 8px; background: #fff; }
+.eval-files button { min-height: 36px; font-size: 12px; }
+.eval-files button.active { box-shadow: inset 2px 0 var(--accent); }
+.eval-files pre { font-size: 13px; line-height: 1.6; }
+.eval-checks { gap: 0; }
+.eval-checks > div { min-height: 52px; padding: 9px 0; }
+.eval-checks > div > span { min-width: 58px; padding: 3px 6px; border-radius: 5px; background: var(--surface-subtle); color: var(--text-secondary); font-size: 12px; font-weight: 700; text-align: center; }
+.eval-checks > div.satisfied > span { background: var(--status-success-bg); color: var(--success); }
+.eval-checks > div.not_satisfied > span { background: var(--status-danger-bg); color: var(--danger); }
+.eval-checks > div > button { grid-column: 1 / -1; justify-self: start; min-height: 32px; margin-top: 4px; }
+.rubric-card { margin-bottom: 0; padding: 18px 0; border-bottom-color: #e4e8ee; }
+.rubric-card:first-of-type { padding-top: 10px; }
+.rubric-card header { align-items: center; }
+.rubric-meta { display: flex; align-items: center; gap: 8px; }
+.rubric-meta small { color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
+.review-state { min-height: 24px; display: inline-flex; align-items: center; padding: 2px 7px; border: 1px solid var(--status-warning-border); border-radius: 5px; background: var(--status-warning-bg); color: #765500; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.review-state.confirmed { border-color: var(--status-success-border); background: var(--status-success-bg); color: var(--success); }
+.review-lanes { gap: 0 !important; margin-top: 12px !important; }
+.review-lane { padding: 9px 0 9px 12px; border-left: 2px solid #d9dfe8; }
+.review-lane + .review-lane { margin-top: 4px; }
+.review-lane.auto { border-left-color: #9bb4e8; }
+.review-lane.ai { border-left-color: #c8ced8; }
+.review-lane dt { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.review-lane.ai dt::after { content: " · 仅供参考"; color: var(--text-muted); font-weight: 500; }
+.review-lane dd { margin-top: 4px; color: var(--text-primary); font-size: 13px; line-height: 1.62; }
+.teacher-confirmation { margin-top: 14px; padding: 14px; border: 1px solid #dfe4eb; border-radius: 8px; background: #fafbfd; }
+.teacher-confirmation-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.teacher-confirmation-heading strong { font-size: 13px; }
+.teacher-confirmation-heading span { color: var(--text-muted); font-size: 12px; }
+.rubric-card label { font-size: 12px; }
+.rubric-card input[type="number"], .rubric-card textarea { min-height: var(--control-height); background: #fff; }
+.rubric-card input::placeholder, .rubric-card textarea::placeholder { color: #7a8494; opacity: 1; }
+.rubric-card input:disabled, .rubric-card textarea:disabled { border-color: #e1e5eb; background: #f6f7f9; color: #303948; opacity: 1; }
+.confirm-row { min-height: 28px; margin-bottom: 0 !important; }
+.eval-actions { position: sticky; bottom: -28px; z-index: 2; margin: 0 -20px -28px; padding: 14px 20px 18px; border-top: 1px solid var(--border); background: rgb(255 255 255 / .96); }
+.eval-actions .primary { flex: 1 1 auto; }
+
+@media (max-width: 1024px) {
+  .eval-shell { height: auto; min-height: calc(100vh - var(--topbar-height)); overflow: visible; }
+  .eval-layout { display: block; overflow: visible; }
+  .eval-main, .eval-side { overflow: visible; }
+  .eval-actions { bottom: 0; margin-bottom: -28px; }
+}
+@media (max-width: 720px) {
+  .refresh, .primary, .action-grid button { min-height: var(--control-height-touch); }
+  .eval-toolbar { align-items: flex-start; flex-wrap: wrap; padding: 10px 12px; }
+  .eval-toolbar-copy { flex: 1 1 220px; }
+  .eval-main, .eval-side { padding: 16px; }
+  .eval-files { grid-template-columns: 156px minmax(210px,1fr); overflow-x: auto; }
+  .eval-checks > div { grid-template-columns: minmax(0,1fr) auto; }
+  .teacher-confirmation { padding: 12px; }
+  .eval-actions { margin-inline: -16px; padding-inline: 16px; }
+}
