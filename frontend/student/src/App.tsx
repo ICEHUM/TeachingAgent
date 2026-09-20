@@ -33,6 +33,8 @@ export function App() {
   const [connection, setConnection] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
   const [toast, setToast] = useState("");
   const [coachOpen, setCoachOpen] = useState(false);
+  const [taskCollapsed, setTaskCollapsed] = useState(false);
+  const [resultCollapsed, setResultCollapsed] = useState(false);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const saveRef = useRef<() => Promise<string | false>>(async () => false);
   const stageRef = useRef<string | null>(null);
@@ -185,7 +187,7 @@ export function App() {
       });
       setRunState("idle");
       setRunMessage(result.last_tool_status === "succeeded" ? "本次检查通过，验收结果已写入当前版本。" : result.last_tool_status === "infrastructure_failure" ? "运行环境异常，本次不计入学习失败次数。" : "检查完成：仍有验收项未满足，请查看证据。" );
-      await load(); setBottomTab("requirements");
+      await load(); setBottomTab("requirements"); setResultCollapsed(false);
     } catch (error) {
       const apiError = error instanceof ApiError ? error : null;
       setRunState(apiError?.code === "timeout" ? "timeout" : "failed");
@@ -238,18 +240,19 @@ export function App() {
     {waitingTeacher && <div className="teacher-banner" role="status"><strong>正在等待教师</strong><span>你的代码和证据已保留，可以继续查看任务与运行结果。</span></div>}
     {saveState === "failed" && <div className="save-recovery" role="alert"><div><strong>代码尚未保存</strong><span>编辑器中的内容仍然保留。请重试；若冲突持续，可先导出本地副本。</span></div><div><button onClick={() => void save()}>重试保存</button><button onClick={exportDraft}>导出本地代码</button><button onClick={() => { if (confirm("重新读取将放弃编辑器中尚未保存的内容，是否继续？")) void loadFile(activeFile); }}>重新读取</button></div></div>}
 
-    <main className="workspace-grid">
+    <main className={`workspace-grid ${taskCollapsed ? "task-collapsed" : ""}`}>
       <aside className="task-pane" aria-label="任务与阶段">
-        <section className="task-head"><span className="eyebrow">{data.task.key} · {data.task.version}</span><h1>{data.task.title}</h1><p>{data.stage.objective}</p></section>
-        <section className="pane-section"><h2>学习阶段</h2><ol className="stage-list">{data.stages.map((stage) => <li key={stage.key} className={stage.status}><span className="stage-index">{stage.status === "complete" ? "✓" : stage.position + 1}</span><span>{stage.title}</span>{stage.status === "current" && <b>当前</b>}</li>)}</ol></section>
+        <div className="task-compact-rail"><button onClick={() => setTaskCollapsed(false)} aria-label="展开任务栏">展开任务</button><b>{data.stage.position + 1}/{data.stage.total}</b><span>{data.stage.title}</span></div>
+        <section className="task-head"><div className="task-head-row"><span className="eyebrow">{data.task.key} · {data.task.version}</span><button className="task-collapse" onClick={() => setTaskCollapsed(true)}>收起任务</button></div><h1>{data.task.title}</h1><p>{data.stage.objective}</p></section>
+        <section className="pane-section stage-section"><div className="section-row"><h2>任务进度</h2><span>{data.stage.position + 1}/{data.stage.total}</span></div><div className="stage-progress" role="progressbar" aria-label="任务阶段进度" aria-valuemin={1} aria-valuemax={data.stage.total} aria-valuenow={data.stage.position + 1}><i style={{ transform: `scaleX(${(data.stage.position + 1) / data.stage.total})` }} /></div><ol className="stage-list">{data.stages.map((stage) => <li key={stage.key} className={stage.status}><span className="stage-index">{stage.status === "complete" ? "✓" : stage.position + 1}</span><span>{stage.title}</span>{stage.status === "current" && <b>当前</b>}</li>)}</ol></section>
         <section className="pane-section requirement-compact"><div className="section-row"><h2>本阶段验收</h2><span>{data.requirement_summary.satisfied_count}/{data.requirement_summary.required_count}</span></div>{data.requirements.map((item) => <button key={item.id} disabled={!item.operation_id} onClick={() => void openEvidence(item)} className={`compact-requirement ${item.status.toLowerCase()}`}><span aria-hidden="true">{item.status === "SATISFIED" ? "✓" : item.status === "NOT_SATISFIED" ? "×" : "·"}</span><span>{item.name}</span>{item.has_old_result && <small>有旧结果</small>}</button>)}</section>
       </aside>
 
-      <section className="code-pane" aria-label="Workspace 代码区">
+      <section className={`code-pane ${resultCollapsed ? "result-collapsed" : ""}`} aria-label="Workspace 代码区">
         <div className="workspace-toolbar">
           <div className="file-context"><span className="eyebrow">代码区</span><strong>{activeFile}</strong></div>
           <div className="version-context" aria-label="当前版本状态"><span>已检查版本</span><b>{data.latest_snapshot?.label || "尚未创建"}</b></div>
-          <div className="toolbar-actions"><button className="button secondary" onClick={() => void save()} disabled={saveState === "saving" || saveState === "saved"}>保存 <kbd>Ctrl S</kbd></button><button className="button secondary" onClick={() => void snapshot()} disabled={saveState === "saving"}>创建版本快照</button><button className="button primary" onClick={() => void run()} disabled={runState === "queued" || runState === "running" || waitingTeacher}>{runState === "queued" ? "运行排队" : runState === "running" ? "运行中…" : "运行检查"}</button></div>
+          <div className="toolbar-actions"><button className="button secondary" onClick={() => void save()} disabled={saveState === "saving" || saveState === "saved"}>保存 <kbd>Ctrl S</kbd></button><button className="button secondary" onClick={() => void snapshot()} disabled={saveState === "saving"}>创建版本快照</button><button className={`button primary ${runState === "queued" || runState === "running" ? "is-running" : ""}`} onClick={() => void run()} disabled={runState === "queued" || runState === "running" || waitingTeacher}>{runState === "queued" ? "运行排队" : runState === "running" ? "运行中…" : "运行检查"}</button></div>
           <p className="mobile-ide-note">手机适合查看任务、反馈与求助；完整编码建议使用电脑。</p>
         </div>
         <div className="editor-zone">
@@ -260,7 +263,7 @@ export function App() {
           </div>
         </div>
         <div className="result-panel">
-          <div className="tabs" role="tablist" aria-label="运行与验收"><button role="tab" aria-selected={bottomTab === "result"} onClick={() => setBottomTab("result")}>运行结果</button><button role="tab" aria-selected={bottomTab === "requirements"} onClick={() => setBottomTab("requirements")}>验收 <span>{data.requirement_summary.satisfied_count}/{data.requirement_summary.required_count}</span></button><button role="tab" aria-selected={bottomTab === "preview"} onClick={() => setBottomTab("preview")}>成果预览</button></div>
+          <div className="result-head"><div className="tabs" role="tablist" aria-label="运行与验收"><button role="tab" aria-selected={bottomTab === "result"} onClick={() => { setBottomTab("result"); setResultCollapsed(false); }}>运行结果</button><button role="tab" aria-selected={bottomTab === "requirements"} onClick={() => { setBottomTab("requirements"); setResultCollapsed(false); }}>验收 <span>{data.requirement_summary.satisfied_count}/{data.requirement_summary.required_count}</span></button><button role="tab" aria-selected={bottomTab === "preview"} onClick={() => { setBottomTab("preview"); setResultCollapsed(false); }}>成果预览</button></div><button className="result-toggle" aria-expanded={!resultCollapsed} onClick={() => setResultCollapsed((value) => !value)}>{resultCollapsed ? "展开结果" : "收起结果"}</button></div>
           {bottomTab === "result" && <div className="result-content" role="tabpanel"><RunStateView state={runState} message={runMessage} snapshot={runSnapshot || data.latest_snapshot?.label || "尚未创建版本快照"} /></div>}
           {bottomTab === "requirements" && <div className="requirement-table" role="tabpanel"><div className="table-head"><span>验收项</span><span>状态</span><span>版本快照</span><span>检查器</span><span>最近更新</span></div>{data.requirements.map((item) => <button className="table-row" key={item.id} disabled={!item.operation_id} onClick={() => void openEvidence(item)}><span><b>{item.name}</b><small>{item.kind.replaceAll("_", " ")}</small></span><span className={`status-text ${item.status.toLowerCase()}`}>{statusLabel(item.status)}{item.has_old_result && <small>旧证据不参与当前验收</small>}</span><span>{item.snapshot_label || "—"}</span><span className="mono">{item.evaluator}</span><span>{item.evaluated_at ? formatTime(item.evaluated_at) : "—"}</span></button>)}</div>}
           {bottomTab === "preview" && <div className="preview-empty" role="tabpanel"><strong>FAQ 服务成果预览</strong><p>当前阶段通过后，这里将展示基于学生代码运行的问答结果。预览不会替代验收。</p><dl><div><dt>当前代码</dt><dd>{data.latest_snapshot?.label || "尚未创建版本快照"}</dd></div><div><dt>阶段状态</dt><dd>{data.requirement_summary.satisfied ? "已满足" : `${data.requirement_summary.satisfied_count} / ${data.requirement_summary.required_count} 已满足`}</dd></div></dl></div>}

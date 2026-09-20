@@ -114,14 +114,14 @@ export function App() {
     </header>
     <main className="teacher-layout">
       <section className="classroom-list" aria-label="课堂学生列表">
-        <header className="list-head"><div><span className="eyebrow">课堂工作台</span><h1>{groupTitle}</h1></div><button className="refresh" onClick={() => void loadClassroom()}>刷新数据</button></header>
+        <header className="list-head"><div className="list-head-copy"><span className="eyebrow">课堂工作台</span><h1>{groupTitle}</h1><p>依据真实教学事件，每 5 秒自动同步。</p></div><div className="classroom-overview" aria-label="课堂状态概览"><span className={classroom.groups.attention.length ? "needs-attention" : ""}><b>{classroom.groups.attention.length}</b><small>待介入</small></span><span><b>{classroom.groups.progress.length}</b><small>学习中</small></span><span><b>{classroom.groups.completed.length}</b><small>已完成</small></span></div><button className="refresh" onClick={() => void loadClassroom()}>刷新数据</button></header>
         <nav className="group-tabs" aria-label="学生状态分组">{(Object.keys(groupNames) as GroupKey[]).map((key) => <button key={key} aria-current={group === key} onClick={() => chooseGroup(key)}><span>{groupNames[key]}</span><b>{classroom.groups[key].length}</b></button>)}</nav>
         <div className="list-columns"><span>学生 / 当前阶段</span><span>原因</span><span>失败</span><span>已有帮助</span><span>等待</span></div>
         <div className="student-list">{currentList.length ? currentList.map((item) => <StudentRow key={item.attempt_id} item={item} selected={selected === item.attempt_id} onSelect={() => chooseStudent(item.attempt_id)} />) : <EmptyGroup group={group} />}</div>
       </section>
       {detailOpen && <button className="detail-backdrop" aria-label="返回学生列表" onClick={() => setDetailOpen(false)} />}
       <aside className={`intervention-panel ${detailOpen ? "open" : ""}`} aria-label="教师介入详情">
-        {!selected ? <EmptyDetail /> : detailLoading || !detail ? <DetailLoading /> : <InterventionDetail detail={detail} prompt={prompt} setPrompt={setPrompt} actionLoading={actionLoading} actionError={actionError} takeAction={takeAction} showTrace={showTrace} setShowTrace={setShowTrace} onClose={() => setDetailOpen(false)} />}
+        {!selected ? <EmptyDetail /> : detailLoading || !detail ? <DetailLoading /> : <InterventionDetail key={detail.attempt.id} detail={detail} prompt={prompt} setPrompt={setPrompt} actionLoading={actionLoading} actionError={actionError} takeAction={takeAction} showTrace={showTrace} setShowTrace={setShowTrace} onClose={() => setDetailOpen(false)} />}
       </aside>
     </main>
   </div>;
