@@ -169,6 +169,31 @@ def test_d_teacher_resume_revalidates_permission_and_state_version():
     assert len(store.calls) == 1
 
 
+def test_teacher_resume_with_l2_authorization_generates_l2_guidance():
+    graph, config, _, llm, _ = make_runtime()
+    state = initial_state(make_event(operation_id="d-l2", observation="已记录三次失败现象"))
+    state["student_failure_count"] = 2
+    graph.invoke(state, config=config)
+    checkpoint_state = graph.get_state(config).values
+
+    resumed = resume_teacher(
+        graph,
+        config=config,
+        resume={
+            "teacher_id": "teacher-1",
+            "roles": ["teacher"],
+            "expected_state_version": checkpoint_state["state_version"],
+            "response": "允许一次局部示例级提示。",
+            "allow_l2": True,
+        },
+    )
+
+    assert resumed["teacher_resume"]["allow_l2"] is True
+    assert resumed["guidance"]["level"] == "L2"
+    assert resumed["flow_status"] == "WAITING_FOR_STUDENT"
+    assert llm.calls[-1].level == "L2"
+
+
 def test_d_unauthorized_teacher_resume_is_rejected():
     graph, config, _, _, store = make_runtime()
     state = initial_state(make_event(operation_id="d-unauthorized"))

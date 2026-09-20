@@ -109,6 +109,34 @@ class DatabaseTeachingEventStore:
                 payload=event,
                 trusted_attempt_updates=trusted_updates,
             )
+            observation = str(event.get("student_observation") or "").strip()
+            snapshot_id = event.get("snapshot_id")
+            if (
+                not duplicate
+                and event.get("actor_role") == "student"
+                and isinstance(snapshot_id, str)
+                and observation
+            ):
+                definition = await session.scalar(
+                    select(RequirementDefinition).where(
+                        RequirementDefinition.task_stage_id == attempt.current_stage_id,
+                        RequirementDefinition.requirement_key == "retrieval_observation",
+                    )
+                )
+                if definition is not None:
+                    minimum = int((definition.config or {}).get("min_length", 20))
+                    status = "SATISFIED" if len(observation) >= minimum else "NOT_SATISFIED"
+                    await self.service.upsert_requirement_result(
+                        session,
+                        attempt=attempt,
+                        requirement_id=definition.id,
+                        snapshot_id=snapshot_id,
+                        operation_id=f"observation:{operation_id}",
+                        status=status,
+                        evaluator="server:student_explanation:v1",
+                        evidence_refs=[f"event://{record.id}"],
+                        version=definition.version,
+                    )
             return PersistResult(
                 operation_id=operation_id,
                 state_version=record.state_version,
@@ -498,6 +526,26 @@ class PersistentTeachingRuntime:
         response: str,
         allow_l2: bool,
     ) -> Intervention:
+        intervention, _ = await self.resume_intervention_with_state(
+            intervention_id=intervention_id,
+            teacher_id=teacher_id,
+            resume_operation_id=resume_operation_id,
+            expected_state_version=expected_state_version,
+            response=response,
+            allow_l2=allow_l2,
+        )
+        return intervention
+
+    async def resume_intervention_with_state(
+        self,
+        *,
+        intervention_id: str,
+        teacher_id: str,
+        resume_operation_id: str,
+        expected_state_version: int,
+        response: str,
+        allow_l2: bool,
+    ) -> tuple[Intervention, TeachingState]:
         async with self.session_factory() as session:
             intervention, duplicate = await self.service.begin_resume(
                 session,
@@ -509,15 +557,22 @@ class PersistentTeachingRuntime:
                 allow_l2=allow_l2,
             )
             if duplicate and intervention.status == "RESOLVED":
-                return intervention
+                async with checkpoint_saver(self.checkpoint_conninfo) as saver:
+                    graph = build_teaching_graph(
+                        dependencies=self._dependencies(asyncio.get_running_loop()),
+                        checkpointer=saver,
+                    )
+                    state = await graph.aget_state(self.config(intervention.attempt_id))
+                return intervention, cast(TeachingState, state.values)
             attempt_id = intervention.attempt_id
+        result: dict[str, Any]
         try:
             loop = asyncio.get_running_loop()
             async with checkpoint_saver(self.checkpoint_conninfo) as saver:
                 graph = build_teaching_graph(
                     dependencies=self._dependencies(loop), checkpointer=saver
                 )
-                await graph.ainvoke(
+                result = await graph.ainvoke(
                     Command(
                         resume={
                             "teacher_id": teacher_id,
@@ -540,9 +595,10 @@ class PersistentTeachingRuntime:
                 )
             raise
         async with self.session_factory() as session:
-            return await self.service.finish_resume(
+            resolved = await self.service.finish_resume(
                 session,
                 intervention_id=intervention_id,
                 resume_operation_id=resume_operation_id,
                 succeeded=True,
             )
+        return resolved, cast(TeachingState, result)

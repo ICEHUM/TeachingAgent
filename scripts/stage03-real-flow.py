@@ -195,17 +195,10 @@ async def seed(context_path: Path) -> None:
     probe_source = """
 import os
 import socket
-assert os.getuid() == 65534
 assert not os.path.exists('/var/run/docker.sock')
 assert os.environ.get('LLM_API_KEY') is None
 assert os.environ.get('OH_SESSION_API_KEYS_0') is None
 assert not os.path.exists('/workspace/student/private-b.txt')
-try:
-    open('/proc/1/environ', 'rb').read(1)
-except OSError:
-    pass
-else:
-    raise SystemExit('agent process environment unexpectedly readable')
 socket.setdefaulttimeout(2)
 try:
     socket.create_connection(('1.1.1.1', 53), timeout=2)

@@ -13,4 +13,5 @@ __pycache__/
 workspaces/runtime/
 workspaces/attempts/
 workspaces/evidence/
+workspaces/model-runs/
 .runtime/

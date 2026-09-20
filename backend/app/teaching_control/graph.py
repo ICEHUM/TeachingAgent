@@ -524,6 +524,18 @@ def _generate_guidance(
             "kind": draft.kind,
             "message": draft.message,
             "evidence_refs": list(draft.evidence_refs),
+            "next_step": draft.next_step,
+            "uncertainty": draft.uncertainty,
+            "provider": draft.provider,
+            "model": draft.model,
+            "request_id": draft.request_id,
+            "latency_ms": draft.latency_ms,
+            "prompt_tokens": draft.prompt_tokens,
+            "completion_tokens": draft.completion_tokens,
+            "success": draft.success,
+            "fallback_reason": draft.fallback_reason,
+            "raw_output_ref": draft.raw_output_ref,
+            "audit_ref": draft.audit_ref,
         },
     }
 
@@ -565,12 +577,23 @@ def teacher_interrupt(state: TeachingState) -> dict[str, object]:
         "response": str(resumed.get("response", "")).strip(),
         "allow_l2": bool(resumed.get("allow_l2", False)),
     }
-    return {
+    update: dict[str, object] = {
         "teacher_resume": teacher_resume,
         "pending_intervention": None,
         "flow_status": "RUNNING",
         "l2_authorized": bool(resumed.get("allow_l2", False)),
     }
+    if teacher_resume["allow_l2"]:
+        update.update(
+            help_level="L2",
+            decision={
+                "kind": "generate_guidance",
+                "reason": "Teacher explicitly authorized L2 after intervention review.",
+                "guidance_kind": "question",
+                "tool_name": None,
+            },
+        )
+    return update
 
 
 def _persist_event(
@@ -595,6 +618,8 @@ def _persist_event(
             "infrastructure_failure_count": state["infrastructure_failure_count"],
             "actor_id": event["actor_id"],
             "actor_role": event["actor_role"],
+            "student_observation": state["student_observation"],
+            "guidance": dict(state["guidance"]) if state["guidance"] else None,
         },
     )
     return {
@@ -661,6 +686,10 @@ def _evaluate_requirements(
 
 def route_assessment(state: TeachingState) -> str:
     return state["stage_assessment"]["outcome"].lower()
+
+
+def route_after_teacher_resume(state: TeachingState) -> str:
+    return "generate_guidance" if state["teacher_resume"] and state["teacher_resume"]["allow_l2"] else "persist_event"
 
 
 def wait_state(state: TeachingState) -> dict[str, object]:
@@ -782,7 +811,11 @@ def build_teaching_graph(*, dependencies: TeachingGraphDependencies, checkpointe
     builder.add_edge("execute_tool", "persist_event")
     builder.add_edge("generate_guidance", "persist_event")
     builder.add_edge("persist_intervention", "teacher_interrupt")
-    builder.add_edge("teacher_interrupt", "persist_event")
+    builder.add_conditional_edges(
+        "teacher_interrupt",
+        route_after_teacher_resume,
+        {"generate_guidance": "generate_guidance", "persist_event": "persist_event"},
+    )
     builder.add_edge("persist_event", "evaluate_requirements")
     builder.add_edge("evaluate_requirements", "stage_assessment")
     builder.add_conditional_edges(

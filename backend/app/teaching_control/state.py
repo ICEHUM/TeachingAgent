@@ -73,12 +73,24 @@ class TeachingDecision(TypedDict):
     tool_name: str | None
 
 
-class GuidanceRecord(TypedDict):
+class GuidanceRecord(TypedDict, total=False):
     operation_id: str
     level: HelpLevel
     kind: GuidanceKind
     message: str
     evidence_refs: list[str]
+    next_step: str
+    uncertainty: str
+    provider: str
+    model: str
+    request_id: str | None
+    latency_ms: int
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    success: bool
+    fallback_reason: str | None
+    raw_output_ref: str | None
+    audit_ref: str | None
 
 
 class InterventionRecord(TypedDict):

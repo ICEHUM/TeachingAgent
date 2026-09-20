@@ -88,6 +88,18 @@ class GuidanceDraft:
     kind: GuidanceKind
     message: str
     evidence_refs: tuple[str, ...]
+    next_step: str = ""
+    uncertainty: str = ""
+    provider: str = ""
+    model: str = ""
+    request_id: str | None = None
+    latency_ms: int = 0
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    success: bool = True
+    fallback_reason: str | None = None
+    raw_output_ref: str | None = None
+    audit_ref: str | None = None
     duplicate: bool = False
 
 
