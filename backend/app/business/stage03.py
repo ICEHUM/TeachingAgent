@@ -30,7 +30,7 @@ from app.teaching_control.state import (
 )
 
 from .checkpoint import checkpoint_saver
-from .faq import DEFAULT_TASK_POLICY, FAQ_TASK_KEY
+from .faq import DEFAULT_TASK_POLICY, SUPPORTED_FAQ_TASK_KEYS
 from .models import (
     Attempt,
     CourseMembership,
@@ -229,6 +229,7 @@ class DatabaseInterventionStore:
 REQUIREMENT_TOOL = {
     "source_manifest": "inspect_workspace",
     "retrieval_public_tests": "run_faq_tests",
+    "answer_public_tests": "run_faq_tests",
     "citation_static_check": "validate_citations",
     "unknown_question_test": "run_faq_tests",
 }
@@ -326,7 +327,7 @@ class DatabaseToolResultRecorder:
 
 
 def teaching_thread_id(attempt_id: str) -> str:
-    return f"attempt:{attempt_id}:faq-001-v1"
+    return f"attempt:{attempt_id}:teaching-v1"
 
 
 class PersistentTeachingRuntime:
@@ -362,8 +363,8 @@ class PersistentTeachingRuntime:
                 raise BusinessRuleError("attempt_not_found")
             version = await session.get(TaskVersion, attempt.task_version_id)
             task = await session.get(Task, version.task_id) if version else None
-            if version is None or task is None or task.task_key != FAQ_TASK_KEY:
-                raise BusinessRuleError("stage03_supports_only_faq_001_v1")
+            if version is None or task is None or task.task_key not in SUPPORTED_FAQ_TASK_KEYS:
+                raise BusinessRuleError("unsupported_teaching_task")
             stages = list(
                 (
                     await session.scalars(

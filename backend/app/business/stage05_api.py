@@ -325,6 +325,16 @@ async def _workbench_view(
                 "kind": "deepseek", "label": "DeepSeek 教学表达",
                 "detail": guidance.get("message") or "使用安全模板指导",
             })
+    stage_objectives = (version.policy or {}).get("stage_objectives", {})
+    requirement_names = (version.policy or {}).get("requirement_names", {})
+    if not isinstance(stage_objectives, dict):
+        stage_objectives = {}
+    if not isinstance(requirement_names, dict):
+        requirement_names = {}
+    entry_stage = str((version.policy or {}).get("start_stage") or stages[0].stage_key)
+    entry_position = next(
+        (item.position for item in stages if item.stage_key == entry_stage), 0
+    )
     return {
         "identity": {"user_id": learner.id, "display_name": learner.display_name},
         "course": {"code": course.code, "name": course.name},
@@ -339,19 +349,27 @@ async def _workbench_view(
         "stage": {
             "id": current_stage.id, "key": current_stage.stage_key, "title": current_stage.title,
             "position": current_stage.position, "total": len(stages),
-            "objective": STAGE_OBJECTIVES.get(current_stage.stage_key, "完成本阶段验收项。"),
+            "objective": stage_objectives.get(
+                current_stage.stage_key,
+                STAGE_OBJECTIVES.get(current_stage.stage_key, "完成本阶段验收项。"),
+            ),
         },
         "stages": [
             {"key": item.stage_key, "title": item.title, "position": item.position,
-             "status": "complete" if item.position < current_stage.position else (
-                 "current" if item.id == current_stage.id else "upcoming")}
+             "status": (
+                 "skipped" if item.position < entry_position else
+                 "complete" if item.position < current_stage.position else
+                 "current" if item.id == current_stage.id else "upcoming"
+             )}
             for item in stages
         ],
         "requirements": [
             {
                 "id": definition.id,
                 "key": definition.requirement_key,
-                "name": REQUIREMENT_NAMES.get(definition.requirement_key, definition.requirement_key),
+                "name": (definition.config or {}).get("display_name")
+                or requirement_names.get(definition.requirement_key)
+                or REQUIREMENT_NAMES.get(definition.requirement_key, definition.requirement_key),
                 "kind": definition.kind,
                 "required": definition.required,
                 "status": current_results.get(definition.id).status if definition.id in current_results else "NOT_RUN",
@@ -533,24 +551,50 @@ def _graph_event(
     user: User,
     body: RunCreate | GuidanceCreate,
     event_type: str,
+    task_version: str,
+    evidence_refs: list[str] | None = None,
+    evidence_summary: str = "",
 ) -> GraphEvent:
     return {
         "event_id": str(uuid4()),
         "event_type": event_type,
         "attempt_id": attempt.id,
-        "task_version": "FAQ-001-v1",
+        "task_version": task_version,
         "actor_id": user.id,
         "actor_role": "student",
         "expected_state_version": body.expected_state_version,
         "operation_id": body.operation_id,
         "snapshot_id": body.snapshot_id,
-        "evidence_refs": [],
-        "evidence_summary": "",
+        "evidence_refs": list(evidence_refs or []),
+        "evidence_summary": evidence_summary,
         "student_observation": body.observation.strip(),
         "failure_origin": "none",
         "requested_guidance_kind": "question",
         "requested_tool": "run_faq_tests" if event_type == "run_tool" else "",
     }
+
+
+async def _snapshot_requirement_evidence(
+    session: AsyncSession, *, attempt_id: str, snapshot_id: str
+) -> tuple[list[str], str]:
+    rows = list((await session.execute(
+        select(RequirementResult, RequirementDefinition.requirement_key)
+        .join(
+            RequirementDefinition,
+            RequirementDefinition.id == RequirementResult.requirement_id,
+        )
+        .where(
+            RequirementResult.attempt_id == attempt_id,
+            RequirementResult.snapshot_id == snapshot_id,
+        )
+        .order_by(RequirementResult.evaluated_at, RequirementResult.id)
+    )).all())
+    refs: list[str] = []
+    facts: list[str] = []
+    for result, requirement_key in rows:
+        refs.extend(ref for ref in result.evidence_refs if ref not in refs)
+        facts.append(f"{requirement_key}={result.status}")
+    return refs, "；".join(facts)
 
 
 @router.post("/attempts/{attempt_id}/runs")
@@ -569,10 +613,20 @@ async def run_checks(
         raise HTTPException(409, detail={"code": "old_snapshot", "message": "当前代码已有更新。请创建新的检查版本后再运行。"})
     if attempt.state_version != body.expected_state_version:
         raise HTTPException(409, detail={"code": "stale_state_version", "message": "教学状态已更新，请刷新后重试"})
+    version = await session.get(TaskVersion, attempt.task_version_id)
+    task = await session.get(Task, version.task_id) if version else None
+    if version is None or task is None:
+        raise HTTPException(500, "attempt_context_incomplete")
     try:
         state = await _runtime(request).run_event(
             attempt_id=attempt.id,
-            event=_graph_event(attempt=attempt, user=user, body=body, event_type="run_tool"),
+            event=_graph_event(
+                attempt=attempt,
+                user=user,
+                body=body,
+                event_type="run_tool",
+                task_version=f"{task.task_key}-{version.version}",
+            ),
             automatic_followup=True,
         )
     except BusinessRuleError as exc:
@@ -607,10 +661,25 @@ async def request_guidance(
     latest = await _latest_snapshot(session, attempt.id)
     if latest is None or latest.id != body.snapshot_id:
         raise HTTPException(409, detail={"code": "old_snapshot", "message": "请先为当前代码创建检查版本。"})
+    version = await session.get(TaskVersion, attempt.task_version_id)
+    task = await session.get(Task, version.task_id) if version else None
+    if version is None or task is None:
+        raise HTTPException(500, "attempt_context_incomplete")
+    evidence_refs, evidence_summary = await _snapshot_requirement_evidence(
+        session, attempt_id=attempt.id, snapshot_id=body.snapshot_id
+    )
     try:
         state = await _runtime(request).run_event(
             attempt_id=attempt.id,
-            event=_graph_event(attempt=attempt, user=user, body=body, event_type="request_guidance"),
+            event=_graph_event(
+                attempt=attempt,
+                user=user,
+                body=body,
+                event_type="request_guidance",
+                task_version=f"{task.task_key}-{version.version}",
+                evidence_refs=evidence_refs,
+                evidence_summary=evidence_summary,
+            ),
             automatic_followup=False,
         )
     except BusinessRuleError as exc:

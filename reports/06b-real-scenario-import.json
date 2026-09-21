@@ -1,0 +1,28 @@
+{
+  "scenario_id": "vocational-internship-policy-faq-v1",
+  "task": {
+    "key": "POLICY-FAQ-001",
+    "title": "职业学校学生实习政策问答助手"
+  },
+  "stages": 6,
+  "requirements": 11,
+  "rubric_total": 100,
+  "sources": 3,
+  "validated": true,
+  "import": {
+    "scenario_id": "vocational-internship-policy-faq-v1",
+    "course_id": "c02a5c69-e1d6-55a0-80ac-550782f49b79",
+    "task_id": "35d60d3b-92fe-5cb8-9717-e5b9731b11ad",
+    "task_version_id": "bf602453-9433-55d6-af3d-111c251d5fda",
+    "attempt_id": "d9486e06-7e74-5862-bd71-8f96bfc64359",
+    "start_stage": "implement_retrieval",
+    "workspace": "workspaces/attempts/attempt-8a37cf35516827c48675b1aa/source",
+    "written": [],
+    "preserved": [
+      "faq_app.py",
+      "data/faq.json",
+      "data/source_manifest.json",
+      "README.md"
+    ]
+  }
+}

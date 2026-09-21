@@ -467,6 +467,9 @@
 .stage-list li.complete .stage-index { border-color: #9acdb5; background: #edf8f2; color: var(--success); }
 .stage-list li.upcoming { color: #8993a3; }
 .stage-list li.upcoming .stage-index { border-color: #dfe3e9; background: #f7f8fa; color: #8993a3; }
+.stage-list li.skipped { color: #8993a3; }
+.stage-list li.skipped .stage-index { border-style: dashed; background: #f7f8fa; color: #8993a3; }
+.stage-list li .stage-note { color: var(--text-muted); font-weight: 500; }
 .toolbar-actions .button { min-height: 36px; }
 .toolbar-actions .button.quiet { padding-inline: 8px; border-color: transparent; box-shadow: none; }
 .toolbar-actions .button.secondary { border-color: #cbd3df; background: #fff; box-shadow: 0 1px 2px rgb(16 24 40 / .04); }

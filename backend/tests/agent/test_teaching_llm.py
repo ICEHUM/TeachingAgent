@@ -138,3 +138,26 @@ def test_temporary_api_failure_uses_safe_fallback(tmp_path):
     draft = adapter(tmp_path, {}, status=503).generate_guidance(request())
     assert draft.success is False
     assert draft.fallback_reason == "api_unavailable"
+
+
+def test_policy_scenario_prompt_is_grounded_in_real_workspace_contract(tmp_path):
+    policy_request = GuidanceRequest(
+        operation_id="guidance:policy-context",
+        attempt_id="attempt-policy",
+        task_version="POLICY-FAQ-001-v1",
+        stage="implement_retrieval",
+        mode="guided_practice",
+        level="L0",
+        kind="question",
+        evidence_refs=("artifact://allowed/1",),
+        evidence_summary="known_question_hit failed with empty_retrieval",
+    )
+    llm = adapter(tmp_path, {})
+    messages = llm._prompt(policy_request)
+    context = json.loads(messages[1]["content"])
+
+    assert (
+        context["server_owned_task_context"]["task"]
+        == "职业学校学生实习政策问答助手"
+    )
+    assert "没有向量索引" in context["server_owned_task_context"]["workspace"]

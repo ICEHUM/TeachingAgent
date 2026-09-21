@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 FAQ_TASK_KEY = "FAQ-001"
+POLICY_FAQ_TASK_KEY = "POLICY-FAQ-001"
+SUPPORTED_FAQ_TASK_KEYS = frozenset({FAQ_TASK_KEY, POLICY_FAQ_TASK_KEY})
 FAQ_VERSION = "v1"
 
 FAQ_STAGES = (

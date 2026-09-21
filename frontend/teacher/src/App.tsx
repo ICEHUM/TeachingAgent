@@ -123,7 +123,7 @@ export function App() {
   return <div className="teacher-app">
     <header className="topbar">
       <div className="brand"><span className="brand-mark">AI</span><strong>教师课堂台</strong></div>
-      <div className="course-context"><b>AI 应用开发实训</b><span>FAQ-001-v1 · 当前课堂</span></div>
+      <div className="course-context"><b>AI 应用开发实训</b><span>{detail?.task ? `${detail.task.key}-${detail.task.version}` : "当前课堂"}</span></div>
       <div className="top-actions"><a className="health-link" href={`?user=${encodeURIComponent(userId)}&view=health`}>演示健康</a><span className={`connection ${connection}`}><i />{connection === "connected" ? "自动更新" : connection === "offline" ? "网络断开" : "正在重连"}{lastUpdated && <small>· {time(lastUpdated.toISOString())}</small>}</span><span className="avatar" aria-label={`当前教师：${classroom.teacher.display_name}`}>{classroom.teacher.display_name.slice(0, 1)}</span></div>
     </header>
     <main className="teacher-layout">
@@ -230,7 +230,7 @@ function Setup() {
     <section className="login-shell" aria-labelledby="login-title">
       <div className="login-context">
         <div className="login-brand"><span className="brand-mark">AI</span><strong>实训教练</strong></div>
-        <p className="login-eyebrow">FAQ-001 · 演示教学空间</p>
+        <p className="login-eyebrow">AI 应用开发实训 · 演示教学空间</p>
         <h1 id="login-title">进入你的实训课堂</h1>
         <p>学生完成代码实训与证据验收，教师处理介入、复核作品并发布评价。</p>
         <dl><div><dt>学生</dt><dd>编辑、Snapshot、运行检查、获取分级指导</dd></div><div><dt>教师</dt><dd>查看课堂状态、处理介入、评价学习证据</dd></div></dl>

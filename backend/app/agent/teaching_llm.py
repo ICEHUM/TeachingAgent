@@ -41,6 +41,15 @@ ANSWER_MARKERS = (
     "最终实现",
     "修改为：",
 )
+TASK_CONTEXTS = {
+    "POLICY-FAQ-001-v1": {
+        "task": "职业学校学生实习政策问答助手",
+        "workspace": "学生使用faq_app.py读取data/faq.json中的结构化政策资料；本任务没有向量索引或外部知识库。",
+        "current_goal": "实现retrieve(question, sources)，让典型实习权益问题命中，并保留发布机关、来源链接和适用范围。",
+        "responsibility_boundary": "资料外问题应返回空结果；江苏实施细则不得表述为全国统一规则。",
+        "civic_focus": "依法检索、尊重事实、保护学生权益、区分适用范围、对技术输出负责。",
+    }
+}
 
 
 class GuidanceOutput(BaseModel):
@@ -66,12 +75,24 @@ def _fallback(request: GuidanceRequest) -> tuple[str, str, str]:
             "medium",
         )
     if request.level == "L0":
+        if request.task_version == "POLICY-FAQ-001-v1":
+            return (
+                "资料已经成功加载，但典型实习问题仍未命中。你能先比较问题文本、资料中的 keywords 字段和 retrieve 当前返回值，说明空结果出现在哪一步吗？",
+                "选择一个实习权益问题，记录输入、相关关键词和 retrieve 的实际返回结果。",
+                "medium",
+            )
         return (
             "请先描述已知问题输入时出现了什么现象，以及正常加载资料后哪一项结果仍不符合预期？",
             "用一个已知问题和一个未知问题分别记录当前返回结果。",
             "medium",
         )
     if request.level == "L1":
+        if request.task_version == "POLICY-FAQ-001-v1":
+            return (
+                "现有证据指向 retrieve 的匹配环节。请检查问题文本与每条资料的 question、keywords 是否采用了一致的规范化和匹配条件，同时保留未知问题为空。",
+                "先写下匹配规则，再分别验证夜班问题、江苏范围问题和资料外问题。",
+                "medium",
+            )
         return (
             "现有证据指向检索匹配环节。请检查查询文本与资料问题字段的比较条件，再自行验证判断。",
             "修改前先写下预期匹配条件，然后重新运行已知问题和未知问题测试。",
@@ -165,6 +186,7 @@ class DeepSeekTeachingLLM:
         )
         context = {
             "task_version": request.task_version,
+            "server_owned_task_context": TASK_CONTEXTS.get(request.task_version, {}),
             "stage": request.stage,
             "mode": request.mode,
             "server_selected_level": request.level,

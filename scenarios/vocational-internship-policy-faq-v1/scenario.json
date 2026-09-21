@@ -1,0 +1,63 @@
+{
+  "scenario_id": "vocational-internship-policy-faq-v1",
+  "course": {"code": "DEMO-FAQ-001-RC06", "name": "AI 应用开发实训 · 真实场景验证"},
+  "task": {"key": "POLICY-FAQ-001", "title": "职业学校学生实习政策问答助手"},
+  "version": "v1",
+  "policy": {
+    "tool_profile": "vocational_internship_policy_v1",
+    "scenario_kind": "real_source_pilot",
+    "allow_auto_l2": false,
+    "allow_code_patch": false,
+    "start_stage": "implement_retrieval",
+    "civic_objectives": [
+      "依据现行规则回答公共政策问题，形成法治意识",
+      "区分国家规定与地方实施细则的适用范围",
+      "尊重事实和证据，不为未知问题编造答案",
+      "理解技术系统对学生权益与公共责任的影响",
+      "以可复现测试和清晰说明体现职业责任"
+    ],
+    "value_assessment_boundary": "课程思政通过来源核验、适用范围、拒绝编造和学习解释等可观察行为融入；不按口号表述单独评分。"
+  },
+  "source_manifest": [
+    {"id": "moe-regulation-2021", "title": "职业学校学生实习管理规定（2021年修订）", "url": "https://www.moe.gov.cn/srcsite/A07/moe_737/s3876_qt/202201/t20220121_595529.html", "authority": "中华人民共和国教育部等八部门", "scope": "全国职业学校学生实习管理"},
+    {"id": "moe-qa-2021", "title": "教育部职业教育与成人教育司负责人答记者问", "url": "https://www.moe.gov.cn/jyb_xwfb/s271/202201/t20220121_595544.html", "authority": "中华人民共和国教育部", "scope": "对2021年修订规定的权威解释"},
+    {"id": "jiangsu-rules-2022", "title": "江苏省职业学校学生实习管理实施细则", "url": "https://jyt.jiangsu.gov.cn/art/2022/12/13/art_88010_10725898.html", "authority": "江苏省教育厅等部门", "scope": "江苏省内职业学校学生实习管理"}
+  ],
+  "workspace_files": {
+    "faq_app.py": "starter/faq_app.py",
+    "data/faq.json": "starter/data/faq.json",
+    "data/source_manifest.json": "starter/data/source_manifest.json",
+    "README.md": "starter/README.md"
+  },
+  "stages": [
+    {"key": "understand_requirements", "title": "理解政策边界", "objective": "说明系统只依据有效资料回答，并能区分全国规定与地方实施细则。", "aggregation": "ALL_REQUIRED", "requirements": [
+      {"key": "explain_scope", "name": "说明回答边界与适用范围", "kind": "STUDENT_EXPLANATION", "evaluator": "student_explanation_v1", "config": {"min_length": 40}}
+    ]},
+    {"key": "prepare_sources", "title": "核验权威资料", "objective": "核对发布机关、文件版本和适用范围，避免把旧规定或地方细则误作全国规则。", "aggregation": "ALL_REQUIRED", "requirements": [
+      {"key": "source_manifest", "name": "权威资料清单完整", "kind": "STATIC_CHECK", "evaluator": "source_manifest_v1", "config": {"min_sources": 3}},
+      {"key": "source_quality_review", "name": "教师确认资料版本与范围", "kind": "TEACHER_REVIEW", "evaluator": "teacher_review_v1", "config": {}}
+    ]},
+    {"key": "implement_retrieval", "title": "实现政策检索", "objective": "让实习权益问题命中有效规定，同时保留来源和适用范围信息。", "aggregation": "ALL_REQUIRED", "requirements": [
+      {"key": "retrieval_public_tests", "name": "典型实习问题能够命中", "kind": "AUTO_TEST", "evaluator": "pytest_policy_retrieval_v1", "config": {"suite": "policy_retrieval"}},
+      {"key": "retrieval_observation", "name": "提交基于证据的调试观察", "kind": "STUDENT_EXPLANATION", "evaluator": "student_explanation_v1", "config": {"min_length": 30}}
+    ]},
+    {"key": "generate_cited_answer", "title": "生成可核验回答", "objective": "回答同时保留发布机关、来源链接和适用范围，让读者能够复核依据。", "aggregation": "ALL_REQUIRED", "requirements": [
+      {"key": "answer_public_tests", "name": "回答来自命中资料", "kind": "AUTO_TEST", "evaluator": "pytest_policy_answer_v1", "config": {"suite": "policy_answer"}},
+      {"key": "citation_static_check", "name": "回答包含权威来源与范围", "kind": "STATIC_CHECK", "evaluator": "policy_citation_v1", "config": {"require_urls": true, "require_scope": true}}
+    ]},
+    {"key": "validate_boundaries", "title": "验证责任边界", "objective": "面对资料外问题明确说明无法判断，不编造政策结论。", "aggregation": "ALL_REQUIRED", "requirements": [
+      {"key": "unknown_question_test", "name": "资料外问题不伪造答案", "kind": "AUTO_TEST", "evaluator": "pytest_policy_boundary_v1", "config": {"suite": "policy_boundary"}},
+      {"key": "boundary_transfer", "name": "区分国家规定与江苏细则", "kind": "TRANSFER_TASK", "evaluator": "transfer_task_v1", "config": {"case": "national_vs_local"}}
+    ]},
+    {"key": "deliver", "title": "完成可信交付", "objective": "提供可复现运行说明，并解释资料更新后如何重新核验结果。", "aggregation": "ALL_REQUIRED", "requirements": [
+      {"key": "delivery_static_check", "name": "运行与资料更新说明完整", "kind": "STATIC_CHECK", "evaluator": "delivery_manifest_v1", "config": {"required_files": ["README.md"]}},
+      {"key": "delivery_review", "name": "教师确认责任边界说明", "kind": "TEACHER_REVIEW", "evaluator": "teacher_review_v1", "config": {}}
+    ]}
+  ],
+  "rubric": [
+    {"key": "function_boundary", "title": "检索功能与责任边界", "max_score": 40, "requirement_keys": ["retrieval_public_tests", "answer_public_tests", "unknown_question_test"]},
+    {"key": "debug_explanation", "title": "证据分析与调试解释", "max_score": 25, "requirement_keys": ["explain_scope", "retrieval_observation"]},
+    {"key": "source_literacy", "title": "权威来源与适用范围", "max_score": 20, "requirement_keys": ["source_manifest", "citation_static_check", "boundary_transfer"]},
+    {"key": "delivery_responsibility", "title": "工程规范与职业责任", "max_score": 15, "requirement_keys": ["source_quality_review", "delivery_static_check", "delivery_review"]}
+  ]
+}

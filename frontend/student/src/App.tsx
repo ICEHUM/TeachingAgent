@@ -302,7 +302,7 @@ export function App() {
       <aside className="task-pane" aria-label="任务与阶段">
         <div className="task-compact-rail"><button onClick={() => setTaskCollapsed(false)} aria-label="展开任务栏">展开任务</button><b>{data.stage.position + 1}/{data.stage.total}</b><span>{data.stage.title}</span></div>
         <section className="task-head"><div className="task-head-row"><span className="task-id">{data.task.key} · {data.task.version}</span><button className="task-collapse" onClick={() => setTaskCollapsed(true)}>收起任务</button></div><h1>{data.task.title}</h1><p>{data.stage.objective}</p></section>
-        <section className="pane-section stage-section"><div className="section-row"><h2>任务进度</h2><span>{data.stage.position + 1}/{data.stage.total}</span></div><div className="stage-progress" role="progressbar" aria-label="任务阶段进度" aria-valuemin={1} aria-valuemax={data.stage.total} aria-valuenow={data.stage.position + 1}><i style={{ transform: `scaleX(${(data.stage.position + 1) / data.stage.total})` }} /></div><ol className="stage-list">{data.stages.map((stage) => <li key={stage.key} className={stage.status}><span className="stage-index">{stage.status === "complete" ? "✓" : stage.position + 1}</span><span>{stage.title}</span>{stage.status === "current" && <b>当前</b>}</li>)}</ol></section>
+        <section className="pane-section stage-section"><div className="section-row"><h2>任务进度</h2><span>{data.stage.position + 1}/{data.stage.total}</span></div><div className="stage-progress" role="progressbar" aria-label="任务阶段进度" aria-valuemin={1} aria-valuemax={data.stage.total} aria-valuenow={data.stage.position + 1}><i style={{ transform: `scaleX(${(data.stage.position + 1) / data.stage.total})` }} /></div><ol className="stage-list">{data.stages.map((stage) => <li key={stage.key} className={stage.status}><span className="stage-index">{stage.status === "complete" ? "✓" : stage.position + 1}</span><span>{stage.title}</span>{stage.status === "current" && <b>当前</b>}{stage.status === "skipped" && <b className="stage-note">本次未执行</b>}</li>)}</ol></section>
         <section className="pane-section requirement-compact"><div className="section-row"><h2>本阶段验收</h2><span>{data.requirement_summary.satisfied_count}/{data.requirement_summary.required_count}</span></div>{data.requirements.map((item) => <button key={item.id} disabled={!item.operation_id} onClick={() => void openEvidence(item)} className={`compact-requirement ${item.status.toLowerCase()}`}><span aria-hidden="true">{item.status === "SATISFIED" ? "✓" : item.status === "NOT_SATISFIED" ? "×" : "·"}</span><span>{item.name}</span>{item.has_old_result && <small>有旧结果</small>}</button>)}</section>
       </aside>
 
@@ -421,7 +421,7 @@ function Setup() {
     <section className="login-shell" aria-labelledby="login-title">
       <div className="login-context">
         <div className="login-brand"><span className="brand-mark">AI</span><strong>实训教练</strong></div>
-        <p className="login-eyebrow">FAQ-001 · 演示教学空间</p>
+        <p className="login-eyebrow">AI 应用开发实训 · 演示教学空间</p>
         <h1 id="login-title">进入你的实训课堂</h1>
         <p>学生完成代码实训与证据验收，教师处理介入、复核作品并发布评价。</p>
         <dl><div><dt>学生</dt><dd>编辑代码、运行检查、获取分级指导</dd></div><div><dt>教师</dt><dd>查看课堂状态、处理介入、评价学习证据</dd></div></dl>

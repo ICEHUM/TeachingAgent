@@ -158,6 +158,74 @@ raise SystemExit(0 if payload["passed"] else 2)
 '''
 
 
+POLICY_FAQ_TESTS = r'''
+import importlib.util
+import json
+from pathlib import Path
+
+program = Path("/workspace/student/faq_app.py")
+source_path = Path("/workspace/student/data/faq.json")
+checks = []
+try:
+    spec = importlib.util.spec_from_file_location("student_policy_faq", program)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sources = module.load_sources(str(source_path))
+    checks.append({"code": "sources_loaded", "passed": isinstance(sources, list) and len(sources) >= 3})
+    known = module.retrieve("实习单位可以安排学生上夜班吗？", sources)
+    checks.append({"code": "known_question_hit", "passed": isinstance(known, list) and len(known) > 0})
+    unknown = module.retrieve("火星基地的学生实习补贴是多少？", sources)
+    checks.append({"code": "unknown_question_no_fabrication", "passed": isinstance(unknown, list) and len(unknown) == 0})
+    citation_ok = bool(known) and all(
+        isinstance(item, dict)
+        and bool(item.get("source"))
+        and bool(item.get("authority"))
+        and bool(item.get("scope"))
+        for item in known
+    )
+    checks.append({"code": "authoritative_citation_present", "passed": citation_ok})
+    local = module.retrieve("江苏省内职业学校如何落实学生实习管理？", sources)
+    local_scope_ok = bool(local) and any("江苏" in str(item.get("scope", "")) for item in local)
+    checks.append({"code": "local_rule_scope_preserved", "passed": local_scope_ok})
+except Exception as exc:
+    checks.append({"code": "runtime_error", "passed": False, "detail": type(exc).__name__})
+failed = [item["code"] for item in checks if not item["passed"]]
+code = "passed" if not failed else ("empty_retrieval" if "known_question_hit" in failed else failed[0])
+payload = {"passed": not failed, "code": code, "checks": checks}
+print("__TEACHING_EVIDENCE__=" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
+raise SystemExit(0 if payload["passed"] else 2)
+'''
+
+
+POLICY_CITATION_TESTS = r'''
+import importlib.util
+import json
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("student_policy_faq", Path("/workspace/student/faq_app.py"))
+module = importlib.util.module_from_spec(spec)
+checks = []
+try:
+    spec.loader.exec_module(module)
+    sources = module.load_sources("/workspace/student/data/faq.json")
+    hits = module.retrieve("学校可以强制学生到指定企业实习吗？", sources)
+    citation_ok = bool(hits) and all(
+        isinstance(item, dict)
+        and bool(item.get("source"))
+        and bool(item.get("authority"))
+        and bool(item.get("scope"))
+        for item in hits
+    )
+    checks.append({"code": "authoritative_citation_present", "passed": citation_ok})
+except Exception as exc:
+    checks.append({"code": "runtime_error", "passed": False, "detail": type(exc).__name__})
+payload = {"passed": all(item["passed"] for item in checks), "checks": checks}
+payload["code"] = "passed" if payload["passed"] else checks[0]["code"]
+print("__TEACHING_EVIDENCE__=" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
+raise SystemExit(0 if payload["passed"] else 2)
+'''
+
+
 TOOL_CATALOG: dict[str, ToolSpec] = {
     "inspect_workspace": ToolSpec(
         "inspect_workspace",
@@ -212,6 +280,31 @@ TOOL_CATALOG: dict[str, ToolSpec] = {
         ),
     ),
 }
+
+
+POLICY_TOOL_CATALOG: dict[str, ToolSpec] = {
+    **TOOL_CATALOG,
+    "run_faq_tests": ToolSpec(
+        "run_faq_tests", "EVALUATION", 45, True, ("AUTO_TEST",),
+        _python_command(POLICY_FAQ_TESTS),
+    ),
+    "validate_retrieval": ToolSpec(
+        "validate_retrieval", "EVALUATION", 45, True, ("AUTO_TEST",),
+        _python_command(POLICY_FAQ_TESTS),
+    ),
+    "validate_citations": ToolSpec(
+        "validate_citations", "EVALUATION", 45, True, ("STATIC_CHECK", "AUTO_TEST"),
+        _python_command(POLICY_CITATION_TESTS),
+    ),
+}
+
+
+def tool_catalog_for(task_version: str) -> dict[str, ToolSpec]:
+    if task_version == "POLICY-FAQ-001-v1":
+        return POLICY_TOOL_CATALOG
+    if task_version == "FAQ-001-v1":
+        return TOOL_CATALOG
+    raise ToolPolicyError(f"unsupported task version: {task_version}")
 
 
 def _truncate(value: str, limit: int) -> tuple[str, bool]:
@@ -373,9 +466,9 @@ class OpenHandsExecutor:
         return result
 
     def execute(self, request: ToolExecutionRequest) -> ToolExecutionResult:
-        spec = TOOL_CATALOG.get(request.tool_name)
+        spec = tool_catalog_for(request.task_version).get(request.tool_name)
         if spec is None:
-            raise ToolPolicyError("tool is not in the FAQ-001-v1 catalog")
+            raise ToolPolicyError("tool is not in the server-owned task catalog")
         if request.tool_capability != spec.capability:
             raise ToolPolicyError("client capability does not match the server tool catalog")
         if request.timeout_seconds <= 0 or request.timeout_seconds > spec.timeout_seconds:
