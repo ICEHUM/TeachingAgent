@@ -6,8 +6,10 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -49,6 +51,25 @@ CONFIRMATION = "RESET_DEMO_RC06"
 ATTEMPT_ROOT = (ROOT / "workspaces" / "attempts").resolve()
 EVIDENCE_ROOT = (ROOT / "workspaces" / "evidence").resolve()
 MODEL_ROOT = (ROOT / "workspaces" / "model-runs").resolve()
+LOGIN_FILE = Path(os.environ.get("TEMP") or tempfile.gettempdir()) / "teachingagent-stage06-demo-login.json"
+
+
+def ensure_demo_credentials() -> dict[str, str]:
+    if LOGIN_FILE.exists():
+        payload = json.loads(LOGIN_FILE.read_text(encoding="utf-8"))
+        required = {"student_account", "student_password", "teacher_account", "teacher_password"}
+        if required.issubset(payload) and all(payload[key] for key in required):
+            return payload
+    payload = {
+        "student_account": "demo_student",
+        "student_password": secrets.token_urlsafe(12),
+        "teacher_account": "demo_teacher",
+        "teacher_password": secrets.token_urlsafe(12),
+    }
+    LOGIN_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return payload
+
+
 
 
 def stable_id(name: str) -> str:
@@ -247,7 +268,8 @@ def main() -> None:
             removed["checkpoint_rows"] = reset_checkpoint(checkpoint_url, attempt_ids)
         seeded = seed(session)
     engine.dispose()
-    report = {"environment": os.getenv("TEACHING_ENV", "").upper(), "action": args.action, "namespace": "stage06-rc1", "removed": removed, "seeded": seeded, "passed": True}
+    credentials = ensure_demo_credentials()
+    report = {"environment": os.getenv("TEACHING_ENV", "").upper(), "action": args.action, "namespace": "stage06-rc1", "removed": removed, "seeded": seeded, "login": {"credential_file": str(LOGIN_FILE), "student_account": credentials["student_account"], "teacher_account": credentials["teacher_account"]}, "passed": True}
     payload = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
         target = args.output if args.output.is_absolute() else ROOT / args.output

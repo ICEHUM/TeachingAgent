@@ -41,12 +41,20 @@ def spawn(name: str, command: list[str], *, env: dict[str, str]) -> int:
 def main() -> None:
     RUNTIME.mkdir(parents=True, exist_ok=True)
     info = json.loads((Path(os.environ["TEMP"]) / "teachingagent-02b-db.json").read_text(encoding="utf-8"))
+    login_path = Path(os.environ["TEMP"]) / "teachingagent-stage06-demo-login.json"
+    if not login_path.exists():
+        raise RuntimeError("Demo login credentials missing; run stage06_demo.py init first")
+    login = json.loads(login_path.read_text(encoding="utf-8"))
     env = os.environ.copy()
     env.update({
         "PYTHONPATH": str(ROOT / "backend"),
-        "TEACHING_ENV": "development",
+        "TEACHING_ENV": "DEMO",
         "DEV_AUTH_ENABLED": "true",
         "LANGGRAPH_STRICT_MSGPACK": "true",
+        "DEMO_STUDENT_ACCOUNT": login["student_account"],
+        "DEMO_STUDENT_PASSWORD": login["student_password"],
+        "DEMO_TEACHER_ACCOUNT": login["teacher_account"],
+        "DEMO_TEACHER_PASSWORD": login["teacher_password"],
         "TEACHING_DATABASE_URL": (
             f"postgresql+psycopg://teaching_app:{quote_plus(info['teaching_app_password'])}"
             f"@{info['host']}:{info['port']}/{info['database']}"

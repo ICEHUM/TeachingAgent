@@ -371,5 +371,56 @@ function EvidenceDrawer({ evidence, loading, onClose }: { evidence: Evidence | n
 
 function EditorLoading() { return <div className="editor-loading"><i/><span>正在启动 Workspace 编辑器…</span></div>; }
 function Loading() { return <div className="page-loading"><div className="loading-brand"><span className="brand-mark">AI</span><strong>实训教练</strong></div><div className="skeleton-layout"><i/><i/><i/></div><p>正在连接 Workspace 和教学状态…</p></div>; }
-function Setup() { return <main className="setup-state"><span className="brand-mark">AI</span><h1>打开一个实训任务</h1><p>请从课程任务入口进入工作台。当前页面没有收到学生与 Attempt 上下文。</p></main>; }
+
+type DemoLoginResult = { role: "student" | "teacher"; display_name: string; user_id: string; attempt_id: string | null };
+
+function Setup() {
+  useEffect(() => { document.title = "AI 实训教练 · 登录"; }, []);
+  const [account, setAccount] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function signIn(event: React.FormEvent) {
+    event.preventDefault(); setSubmitting(true); setError("");
+    try {
+      const response = await fetch("/api/product/auth/demo-login", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, password }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = body.detail; throw new Error(typeof detail === "object" ? detail.message : detail || "登录失败");
+      }
+      const result = body as DemoLoginResult;
+      const base = result.role === "student" ? "http://127.0.0.1:5173/" : "http://127.0.0.1:5174/";
+      const target = new URL(base);
+      target.searchParams.set("user", result.user_id);
+      if (result.attempt_id) target.searchParams.set("attempt", result.attempt_id);
+      location.assign(target.toString());
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "登录失败，请检查服务状态。"); }
+    finally { setSubmitting(false); }
+  }
+
+  return <main className="login-page">
+    <section className="login-shell" aria-labelledby="login-title">
+      <div className="login-context">
+        <div className="login-brand"><span className="brand-mark">AI</span><strong>实训教练</strong></div>
+        <p className="login-eyebrow">FAQ-001 · 演示教学空间</p>
+        <h1 id="login-title">进入你的实训课堂</h1>
+        <p>学生完成代码实训与证据验收，教师处理介入、复核作品并发布评价。</p>
+        <dl><div><dt>学生</dt><dd>编辑、Snapshot、运行检查、获取分级指导</dd></div><div><dt>教师</dt><dd>查看课堂状态、处理介入、评价学习证据</dd></div></dl>
+      </div>
+      <form className="login-form" onSubmit={signIn}>
+        <header><span>DEMO / TEST</span><h2>账号登录</h2><p>使用演示账号进入对应工作台</p></header>
+        <label><span>账号</span><input autoFocus autoComplete="username" value={account} onChange={(event) => setAccount(event.target.value)} placeholder="请输入演示账号" required /></label>
+        <label><span>密码</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入演示密码" required /></label>
+        {error && <div className="login-error" role="alert"><b>!</b><span>{error}</span></div>}
+        <button className="login-submit" type="submit" disabled={submitting}>{submitting ? "正在验证…" : "进入教学空间"}</button>
+        <div className="login-accounts"><span>演示账号</span><button type="button" onClick={() => setAccount("demo_student")}>学生 demo_student</button><button type="button" onClick={() => setAccount("demo_teacher")}>教师 demo_teacher</button></div>
+        <footer>仅限本机 DEMO / TEST 环境 · 身份将由服务端验证</footer>
+      </form>
+    </section>
+  </main>;
+}
+
 function Fatal({ message, retry }: { message: string; retry: () => void }) { return <main className="setup-state error"><span className="error-mark">!</span><h1>工作台暂时无法载入</h1><p>{message}</p><button className="button primary" onClick={retry}>重新连接</button></main>; }

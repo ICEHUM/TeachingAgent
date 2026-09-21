@@ -11,6 +11,7 @@ from .business.api import router
 from .business.database import create_business_engine, create_session_factory
 from .business.stage03 import PersistentTeachingRuntime
 from .business.stage05_api import router as product_router
+from .business.stage06_api import auth_router as stage06_auth_router
 from .business.stage06_api import router as stage06_router
 
 
@@ -31,8 +32,8 @@ def create_app(
         if dev_auth_enabled is None
         else dev_auth_enabled
     )
-    if enable_dev_auth and runtime_environment not in {"development", "dev", "test"}:
-        raise RuntimeError("DEV_AUTH_ENABLED is forbidden outside DEV/TEST")
+    if enable_dev_auth and runtime_environment not in {"development", "dev", "test", "demo"}:
+        raise RuntimeError("DEV_AUTH_ENABLED is forbidden outside DEV/TEST/DEMO")
     app = FastAPI(title="AI 实训教练业务 API", version="0.2.0")
     url = database_url or os.environ.get("TEACHING_DATABASE_URL", "sqlite+aiosqlite:///./runtime/teaching.db")
     engine = create_business_engine(url, sqlite_test_mode=sqlite_test_mode or url.startswith("sqlite"))
@@ -40,6 +41,7 @@ def create_app(
     session_factory = create_session_factory(engine)
     app.state.session_factory = session_factory
     app.state.dev_auth_enabled = enable_dev_auth
+    app.state.runtime_environment = runtime_environment
     app.state.workspace_manager = AttemptWorkspaceManager()
     checkpoint_url = (
         os.environ.get("LANGGRAPH_CHECKPOINT_DATABASE_URL")
@@ -60,6 +62,7 @@ def create_app(
     app.include_router(router)
     app.include_router(product_router)
     app.include_router(stage06_router)
+    app.include_router(stage06_auth_router)
 
     @app.get("/health")
     async def health():
