@@ -667,3 +667,9 @@
 .login-accounts button:hover { border-color: var(--border-strong); color: var(--text-primary); }
 .login-form footer { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
 @media (max-width: 760px) { .login-page { padding: 0; background: #fff; }.login-shell { min-height: 100vh; grid-template-columns: 1fr; border: 0; border-radius: 0; box-shadow: none; }.login-context { display: none; }.login-form { width: min(440px,100%); margin: auto; padding: 32px 24px; }.login-form h2 { font-size: 26px; }.login-accounts { grid-template-columns: 1fr; } }
+
+
+/* PILOT_FEEDBACK: task-focused student coach. */
+.coach-summary { margin-bottom: 10px !important; color: var(--text-primary) !important; }
+.coach-summary + .evidence-summary { margin-top: 10px; }
+.guidance-block.next p { color: var(--text-primary); font-weight: 600; }

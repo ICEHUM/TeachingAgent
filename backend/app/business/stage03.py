@@ -120,7 +120,7 @@ class DatabaseTeachingEventStore:
                 definition = await session.scalar(
                     select(RequirementDefinition).where(
                         RequirementDefinition.task_stage_id == attempt.current_stage_id,
-                        RequirementDefinition.requirement_key == "retrieval_observation",
+                        RequirementDefinition.kind == "STUDENT_EXPLANATION",
                     )
                 )
                 if definition is not None:

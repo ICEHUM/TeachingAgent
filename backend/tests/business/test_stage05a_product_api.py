@@ -81,6 +81,8 @@ async def test_student_workspace_save_snapshot_and_real_workbench(tmp_path):
         assert workbench.status_code == 200
         assert workbench.json()["stage"]["key"] == "implement_retrieval"
         assert workbench.json()["files"][0]["path"] == "app.py"
+        observation_requirement = next(item for item in workbench.json()["requirements"] if item["kind"] == "STUDENT_EXPLANATION")
+        assert observation_requirement["min_length"] == 20
 
         fixed = "def retrieve(question, sources):\n    return [item for item in sources if item['question'] == question]\n"
         saved = await client.put(

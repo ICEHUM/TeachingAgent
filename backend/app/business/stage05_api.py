@@ -295,6 +295,8 @@ async def _workbench_view(
         for event in events
         if isinstance((event.payload or {}).get("guidance"), dict)
         and (event.payload or {}).get("stage") == current_stage.stage_key
+        and latest_snapshot is not None
+        and (event.payload or {}).get("snapshot_id") == latest_snapshot.id
     ]
     latest_guidance = (guidance_events[-1].payload or {}).get("guidance") if guidance_events else None
     timeline = [
@@ -357,6 +359,7 @@ async def _workbench_view(
                 "snapshot_label": _snapshot_label(latest_snapshot) if definition.id in current_results else None,
                 "operation_id": current_results.get(definition.id).operation_id if definition.id in current_results else None,
                 "evaluator": current_results.get(definition.id).evaluator if definition.id in current_results else definition.evaluator,
+                "min_length": int((definition.config or {}).get("min_length", 0)) if definition.kind == "STUDENT_EXPLANATION" else None,
                 "evidence_refs": current_results.get(definition.id).evidence_refs if definition.id in current_results else [],
                 "evaluated_at": current_results.get(definition.id).evaluated_at.isoformat() if definition.id in current_results else None,
                 "has_old_result": any(

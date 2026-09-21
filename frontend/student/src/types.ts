@@ -1,7 +1,7 @@
 export type Requirement = {
   id: string; key: string; name: string; kind: string; status: string;
   snapshot_id: string | null; snapshot_label: string | null; operation_id: string | null;
-  evaluator: string; evidence_refs: string[]; evaluated_at: string | null; has_old_result: boolean;
+  evaluator: string; min_length?: number | null; evidence_refs: string[]; evaluated_at: string | null; has_old_result: boolean;
 };
 
 export type Guidance = {

@@ -34,6 +34,15 @@ function parseEvidenceChecks(summary: string): EvidenceCheck[] {
 }
 const formatTime = (value: string) => new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 const versionLabel = (value?: string | null) => value ? value.replace(/^Snapshot\s+/i, "版本 ") : "尚未创建";
+const fallbackMessage = (reason?: string | null) => ({
+  forbidden_answer: "模型建议超出了当前允许的帮助范围，系统已自动改为安全引导。",
+  assessment_policy_violation: "考核模式不允许解题性提示，系统已自动改为安全引导。",
+  invalid_evidence_ref: "模型引用了无法核对的证据，系统已自动改为安全引导。",
+  invalid_structure: "模型回复格式异常，系统已显示安全引导。",
+  timeout: "智能指导响应超时，系统已显示安全引导。",
+  api_unavailable: "智能指导服务暂不可用，系统已显示安全引导。",
+  api_error: "智能指导服务返回异常，系统已显示安全引导。",
+}[reason || ""] || "智能指导暂不可用，系统已显示安全引导。你仍可以继续编辑和运行检查。");
 function splitGuidance(message: string) {
   const boundary = message.search(/[。！？]/);
   if (boundary < 0 || boundary >= message.length - 1) return { judgment: message, advice: "" };
@@ -78,12 +87,11 @@ export function App() {
       const next = await api<Workbench>(`/api/product/attempts/${attemptId}/workbench`, userId);
       setData(next);
       const stageChanged = stageRef.current !== null && stageRef.current !== next.stage.id;
-      const hasStageEvidence = next.requirements.some((item) => item.status !== "NOT_RUN");
-      if (stageChanged || (stageRef.current === null && !hasStageEvidence)) {
+      if (stageChanged) {
         setObservation("");
         setRunMessage("");
         setRunSnapshot(null);
-      } else if (hasStageEvidence) {
+      } else {
         setObservation((value) => value || next.student_observation);
       }
       stageRef.current = next.stage.id;
@@ -244,7 +252,8 @@ export function App() {
     if (!data?.latest_snapshot) { setToast("请先运行一次检查，再请求指导。"); return; }
     setCoachLoading(true);
     try {
-      await api(`/api/product/attempts/${attemptId}/guidance`, userId, { method: "POST", body: JSON.stringify({ operation_id: newOperation("ui-guidance"), snapshot_id: data.latest_snapshot.id, expected_state_version: data.attempt.state_version, observation }) });
+      const result = await api<{ guidance?: { success?: boolean; fallback_reason?: string | null } }>(`/api/product/attempts/${attemptId}/guidance`, userId, { method: "POST", body: JSON.stringify({ operation_id: newOperation("ui-guidance"), snapshot_id: data.latest_snapshot.id, expected_state_version: data.attempt.state_version, observation }) });
+      setToast(result.guidance?.success === false ? fallbackMessage(result.guidance.fallback_reason) : "已根据当前情况生成教练建议");
       await load();
     } catch (error) {
       setToast(error instanceof ApiError && ["model_unavailable", "ai_guidance_paused"].includes(error.code) ? "智能指导暂不可用，你仍可以继续编辑和运行检查。" : error instanceof Error ? error.message : "指导请求失败");
@@ -263,8 +272,10 @@ export function App() {
   if (loading) return <Loading />;
   if (fatal || !data) return <Fatal message={fatal || "工作台不可用"} retry={() => { setLoading(true); void load(); }} />;
 
-  const hasCurrentEvidence = data.requirements.some((item) => item.status !== "NOT_RUN");
-  const guidanceData = hasCurrentEvidence ? data.guidance : null;
+  const currentEvidence = data.requirements.filter((item) => item.status !== "NOT_RUN").slice(0, 2);
+  const observationMinimum = data.requirements.find((item) => item.kind === "STUDENT_EXPLANATION")?.min_length || 20;
+  const latestCheck = [...data.timeline].reverse().find((item) => item.label.includes("运行检查"));
+  const guidanceData = data.guidance;
   const guidanceParts = guidanceData ? splitGuidance(guidanceData.message ?? "") : null;
   const waitingTeacher = data.intervention?.status === "WAITING_TEACHER";
 
@@ -320,11 +331,15 @@ export function App() {
       {coachOpen && <button className="coach-backdrop" aria-label="关闭实训教练" onClick={() => { setCoachOpen(false); coachButtonRef.current?.focus(); }} />}
       <aside ref={coachPanelRef} id="student-coach" className={`coach-pane ${coachOpen ? "open" : ""}`} role={coachOpen ? "dialog" : undefined} aria-modal={coachOpen ? "true" : undefined} aria-labelledby="coach-title">
         <div className="coach-head"><div><h2 id="coach-title">实训教练</h2><p>基于当前检查版本与验收证据</p></div><div className="coach-head-actions">{guidanceData?.level && <span className={`help-level ${guidanceData.level.toLowerCase()}`}>{helpLabel(guidanceData.level)}</span>}<button className="coach-close" onClick={() => { setCoachOpen(false); coachButtonRef.current?.focus(); }} aria-label="关闭实训教练">关闭</button></div></div>
-        <CoachSection label="当前观察"><p>{runState === "running" ? `正在检查 ${versionLabel(runSnapshot)}…` : runMessage || (data.requirement_summary.satisfied ? "当前阶段验收项已满足。" : "运行检查后，教练会根据真实证据给出下一步。")}</p></CoachSection>
-        <CoachSection label="证据"><div className="evidence-summary">{data.requirements.filter((item) => item.status !== "NOT_RUN").slice(0, 3).map((item) => <button key={item.id} onClick={() => void openEvidence(item)}><span className={item.status === "SATISFIED" ? "ok" : "bad"}>{item.status === "SATISFIED" ? "通过" : "未通过"}</span><span>{item.name}</span><small>{item.snapshot_label}</small></button>)}{!data.requirements.some((item) => item.status !== "NOT_RUN") && <p className="muted">尚无当前版本的验收证据。</p>}</div></CoachSection>
-        <CoachSection label="本轮指导">{coachLoading ? <div className="coach-generating"><i /><span>正在根据本次运行证据生成指导…</span><small>你仍可以继续编辑代码</small></div> : guidanceData && guidanceParts ? <div className="guidance guidance-structured"><div className="guidance-block judgment"><span>当前判断</span><p>{guidanceParts.judgment}</p></div>{guidanceParts.advice && <div className="guidance-block advice"><span>检查方向 / 建议</span><p>{guidanceParts.advice}</p></div>}{guidanceData.success === false && <div className="fallback-note">智能指导暂不可用，已显示安全模板。你仍可以继续编辑和运行检查。</div>}</div> : <p className="muted">完成一次运行检查后可请求指导。</p>}</CoachSection>
-        <CoachSection label="学生观察"><label className="sr-only" htmlFor="observation">记录你观察到的现象</label><textarea id="observation" value={observation} onChange={(event) => setObservation(event.target.value)} placeholder="例如：资料已成功加载，但已知问题的检索结果仍为空；未知问题返回空结果。" rows={5} maxLength={1200}/><div className="textarea-meta"><span>{observation.length}/1200</span><span>观察会随下次运行写入当前版本的验收记录</span></div></CoachSection>
-        <CoachSection label="下一步行动"><p>{guidanceData?.next_step || "完成修改后，保存并创建新的检查版本，再运行检查。"}</p><button className="button coach-action" onClick={() => void guidance()} disabled={coachLoading || waitingTeacher || data.attempt.ai_guidance_paused}>{data.attempt.ai_guidance_paused ? "教师已暂停智能指导" : "请求本轮指导"}</button></CoachSection>
+        <CoachSection label="检查结论">
+          <p className="coach-summary">{runState === "running" ? `正在检查 ${versionLabel(runSnapshot)}…` : runMessage || latestCheck?.label || (data.latest_snapshot ? "当前代码已有检查版本，可以运行检查。" : "先创建检查版本，再运行检查。")}</p>
+          {currentEvidence.length > 0 && <div className="evidence-summary">{currentEvidence.map((item) => <button key={item.id} onClick={() => void openEvidence(item)}><span className={item.status === "SATISFIED" ? "ok" : "bad"}>{item.status === "SATISFIED" ? "通过" : "未通过"}</span><span>{item.name}</span><small>{versionLabel(item.snapshot_label)}</small></button>)}</div>}
+        </CoachSection>
+        <CoachSection label="教练建议">
+          {coachLoading ? <div className="coach-generating"><i /><span>正在根据当前情况生成建议…</span><small>你仍可以继续编辑代码</small></div> : guidanceData && guidanceParts ? <div className="guidance guidance-structured"><div className="guidance-block judgment"><span>当前判断</span><p>{guidanceParts.judgment}</p></div>{guidanceParts.advice && <div className="guidance-block advice"><span>检查方向</span><p>{guidanceParts.advice}</p></div>}{guidanceData.next_step && <div className="guidance-block next"><span>下一步</span><p>{guidanceData.next_step}</p></div>}{guidanceData.success === false && <div className="fallback-note">{fallbackMessage(guidanceData.fallback_reason)}</div>}</div> : <p className="muted">运行检查后，可以让教练根据你的代码版本和学习记录给出提示。</p>}
+          <button className="button coach-action" onClick={() => void guidance()} disabled={coachLoading || waitingTeacher || data.attempt.ai_guidance_paused}>{data.attempt.ai_guidance_paused ? "教师已暂停智能指导" : coachLoading ? "正在生成建议…" : guidanceData ? "根据最新情况更新建议" : "请求教练指导"}</button>
+        </CoachSection>
+        <CoachSection label="我的发现"><label className="sr-only" htmlFor="observation">写下你观察到的现象</label><textarea id="observation" aria-describedby="observation-help" value={observation} onChange={(event) => setObservation(event.target.value)} placeholder="例如：资料能够加载，但输入已知问题时仍然返回空结果。" rows={5} maxLength={1200}/><div id="observation-help" className="textarea-meta"><span>已写 {observation.length} 字 · 至少 {observationMinimum} 字</span><span>写清输入、实际结果和预期；下次运行或请求指导时提交</span></div></CoachSection>
       </aside>
     </main>}
 
