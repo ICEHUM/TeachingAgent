@@ -110,20 +110,23 @@ export function App() {
   useEffect(() => {
     if (!userId || !attemptId) return;
     const controller = new AbortController();
+    let streamCursor = data?.attempt.state_version ?? 0;
     let retry: number | undefined;
     async function connect() {
       try {
         setConnection("reconnecting");
-        const response = await fetch(`/api/product/attempts/${attemptId}/stream`, { headers: { "X-User-Id": userId }, signal: controller.signal });
+        const response = await fetch(`/api/product/attempts/${attemptId}/stream?since_state_version=${streamCursor}`, { headers: { "X-User-Id": userId }, signal: controller.signal });
         if (!response.ok || !response.body) throw new Error("stream_failed");
         setConnection("connected");
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        let buffer = "";
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const text = decoder.decode(value, { stream: true });
-          if (text.includes("event: teaching_event")) void load();
+          buffer += decoder.decode(value, { stream: true });
+          const frames = buffer.split("\n\n"); buffer = frames.pop() || "";
+          for (const frame of frames) { const id = frame.match(/^id: (\d+)$/m); if (id) streamCursor = Math.max(streamCursor, Number(id[1])); if (frame.includes("event: teaching_event")) void load(); }
         }
         throw new Error("stream_closed");
       } catch {
@@ -137,7 +140,7 @@ export function App() {
     const online = () => setConnection("reconnecting");
     addEventListener("offline", offline); addEventListener("online", online);
     return () => { controller.abort(); if (retry) clearTimeout(retry); removeEventListener("offline", offline); removeEventListener("online", online); };
-  }, [attemptId, load, userId]);
+  }, [attemptId, load, userId, data?.attempt.state_version]);
 
   useEffect(() => {
     if (!toast) return;

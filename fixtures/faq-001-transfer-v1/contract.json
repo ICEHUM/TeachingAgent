@@ -1,0 +1,10 @@
+{
+  "task_key": "FAQ-001-TRANSFER-v1",
+  "max_help_level": "L0",
+  "allowed_capabilities": ["DIAGNOSTIC", "EVALUATION"],
+  "known_question": "借用录音笔需要满足什么条件？",
+  "unknown_question": "图书馆能否代订高铁票？",
+  "required_checks": ["known_question_hit", "unknown_question_rejected", "source_present"],
+  "independent_completed_default": null,
+  "result_is_pilot_outcome": false
+}

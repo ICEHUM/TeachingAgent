@@ -11,6 +11,7 @@ from .business.api import router
 from .business.database import create_business_engine, create_session_factory
 from .business.stage03 import PersistentTeachingRuntime
 from .business.stage05_api import router as product_router
+from .business.stage06_api import router as stage06_router
 
 
 def _enabled(value: str | None) -> bool:
@@ -58,6 +59,7 @@ def create_app(
         app.state.graph_resume_runtime = None
     app.include_router(router)
     app.include_router(product_router)
+    app.include_router(stage06_router)
 
     @app.get("/health")
     async def health():

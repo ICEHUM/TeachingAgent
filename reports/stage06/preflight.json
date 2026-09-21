@@ -1,0 +1,72 @@
+{
+  "overall": "PASS",
+  "demo_ready": true,
+  "checks": [
+    {
+      "name": "PostgreSQL连接",
+      "status": "PASS",
+      "summary": "业务数据库可连接"
+    },
+    {
+      "name": "migration=head",
+      "status": "PASS",
+      "summary": "当前 20260921_0005；目标 20260921_0005"
+    },
+    {
+      "name": "演示账号",
+      "status": "PASS",
+      "summary": "已识别 2/2 个演示账号"
+    },
+    {
+      "name": "FAQ演示数据",
+      "status": "PASS",
+      "summary": "FAQ-001-v1 演示课程与 Attempt 已就绪"
+    },
+    {
+      "name": "LangGraph checkpoint",
+      "status": "PASS",
+      "summary": "checkpoint 表可读；记录数 807"
+    },
+    {
+      "name": "OpenHands Agent Server / image",
+      "status": "PASS",
+      "summary": "OpenHands 1.49.2 固定镜像存在"
+    },
+    {
+      "name": "Docker workspace创建",
+      "status": "PASS",
+      "summary": "只读 Snapshot、internal network 与资源限制已验证"
+    },
+    {
+      "name": "FAQ工具",
+      "status": "PASS",
+      "summary": "6 个 FAQ-001 工具合同存在"
+    },
+    {
+      "name": "DeepSeek模型连通",
+      "status": "PASS",
+      "summary": "模型调用成功"
+    },
+    {
+      "name": "学生前端",
+      "status": "PASS",
+      "summary": "HTTP 200"
+    },
+    {
+      "name": "教师前端",
+      "status": "PASS",
+      "summary": "HTTP 200"
+    },
+    {
+      "name": "磁盘空间",
+      "status": "PASS",
+      "summary": "可用 362.6 GiB"
+    },
+    {
+      "name": "必要端口",
+      "status": "PASS",
+      "summary": "8000:open，5173:open，5174:open"
+    }
+  ],
+  "policy": "存在 FAIL 时禁止进入演示状态"
+}

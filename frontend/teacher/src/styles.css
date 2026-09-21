@@ -602,3 +602,23 @@ blockquote { padding: 12px 14px; border-left-width: 1px; background: #f7f9fd; fo
   .teacher-confirmation { padding: 12px; }
   .eval-actions { margin-inline: -16px; padding-inline: 16px; }
 }
+
+
+/* Stage 06 DEMO_BLOCKER: bounded operational health view; core classroom layout remains frozen. */
+.health-link { min-height: 34px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--text-secondary); font-size: 12px; font-weight: 650; text-decoration: none; }
+.health-link:hover { border-color: var(--border-strong); background: var(--surface-subtle); color: var(--text-primary); }
+.demo-health-page { width: min(920px, calc(100% - 48px)); margin: 0 auto; padding: 56px 0; }
+.demo-health-page > header { max-width: 640px; }
+.demo-health-page > header > span { color: var(--accent); font: 700 12px var(--font-mono); letter-spacing: .08em; }
+.demo-health-page h1 { margin: 10px 0 8px; font-size: 26px; letter-spacing: -.02em; }
+.demo-health-page header p, .demo-health-page footer span, .health-error p { color: var(--text-secondary); font-size: 13px; line-height: 1.65; }
+.health-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1px; margin-top: 32px; border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; background: var(--border); }
+.health-grid article { min-height: 112px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px; background: var(--surface-panel); }
+.health-grid article > div { display: flex; align-items: center; gap: 10px; }
+.health-grid h2 { margin: 0; font-size: 15px; }
+.health-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-muted); }
+.health-dot.normal { background: var(--success); }.health-dot.degraded { background: var(--warning); }.health-dot.unavailable { background: var(--danger); }
+.health-state { min-width: 58px; font-size: 13px; text-align: right; }.health-state.normal { color: var(--success); }.health-state.degraded { color: var(--warning); }.health-state.unavailable { color: var(--danger); }
+.demo-health-page footer { display: grid; gap: 4px; margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 13px; }
+.health-loading, .health-error { margin-top: 32px; padding: 22px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--surface-panel); color: var(--text-secondary); font-size: 13px; }
+@media (max-width: 720px) { .demo-health-page { width: calc(100% - 28px); padding: 32px 0; } .health-grid { grid-template-columns: 1fr; } .health-grid article { min-height: 88px; padding: 18px; } }

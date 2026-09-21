@@ -1,0 +1,2 @@
+﻿data_origin,learner_key,attempt_key,task_version,started_at,ended_at,requirement_satisfied,requirement_total,guidance_levels,guidance_count,teacher_interventions,snapshot_count,transfer_result,teacher_score,student_feedback
+DEMO_NOT_OUTCOME,learner_03fdb30af6e28cb2,learner_93b4f612b2883d32,FAQ-001-v1,2026-09-21T01:46:48.649530+00:00,,0,0,,0,0,0,,,

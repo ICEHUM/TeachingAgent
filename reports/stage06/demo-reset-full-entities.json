@@ -1,0 +1,27 @@
+{
+  "environment": "TEST",
+  "action": "reset",
+  "namespace": "stage06-rc1",
+  "removed": {
+    "attempts": 1,
+    "snapshots": 1,
+    "requirement_results": 1,
+    "interventions": 1,
+    "submissions": 1,
+    "reviews": 1,
+    "formal_grades": 1,
+    "evidence": 2,
+    "checkpoint_rows": 0
+  },
+  "seeded": {
+    "teacher": "14afb9f1-b784-59d5-b4d7-f09fa1c40bf5",
+    "student": "49b58f4e-7bf3-5e68-97cb-1a602e0d808b",
+    "course": "c02a5c69-e1d6-55a0-80ac-550782f49b79",
+    "task": "2d15ca2d-b641-5287-82d7-0090a22ab6b2",
+    "version": "6f405c20-6b27-5363-83ce-cbc4010ca615",
+    "attempt": "24fa0a80-9b5f-55a9-a5b2-8ac6e03c66f7",
+    "course_code": "DEMO-FAQ-001-RC06",
+    "workspace": "isolated-demo-workspace"
+  },
+  "passed": true
+}

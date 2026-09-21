@@ -848,9 +848,12 @@ async def event_stream(
     request: Request,
     session: Annotated[AsyncSession, Depends(db_session)],
     user: Annotated[User, Depends(current_user)],
+    since_state_version: int | None = None,
 ):
     attempt = await _attempt(session, attempt_id=attempt_id, user=user)
-    start_version = attempt.state_version
+    if since_state_version is not None and since_state_version < 0:
+        raise HTTPException(400, "invalid_stream_cursor")
+    start_version = attempt.state_version if since_state_version is None else since_state_version
     factory = request.app.state.session_factory
 
     async def generate():
@@ -868,7 +871,7 @@ async def event_stream(
                 for event in events:
                     cursor = max(cursor, event.state_version)
                     payload = {"state_version": event.state_version, "label": _event_label(event), "created_at": event.created_at.isoformat()}
-                    yield f"event: teaching_event\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                    yield f"id: {event.state_version}\nevent: teaching_event\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
             else:
                 idle += 1
                 if idle % 10 == 0:

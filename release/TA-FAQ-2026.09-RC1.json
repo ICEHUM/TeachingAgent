@@ -1,0 +1,12 @@
+{
+  "rc_id": "TA-FAQ-2026.09-RC1",
+  "frozen_ui_commit": "2d3baf9a0e56d199f6bb97d9b0aeaf5e0708efec",
+  "python_lock": {"path": "backend/uv.lock", "sha256": "23CCDBD6A2A032BE733D4798C2DBF1DB697CA67F3E3873A045EEB460F73C787E"},
+  "frontend_lock": {"path": "package-lock.json", "sha256": "6DA2B77DF3EC24241B02483D0861F7D1EE2E4068E03831ADDC3F93E9A54FB095"},
+  "openhands": "1.49.2",
+  "langgraph": "1.2.11",
+  "postgresql_migration_head": "20260921_0005",
+  "design_system": "TA-DS-1.0-final",
+  "scope": "FAQ-001-v1 demo hardening and classroom pilot readiness",
+  "allowed_change_reasons": ["BUG", "SECURITY", "PILOT_FEEDBACK", "DEMO_BLOCKER"]
+}

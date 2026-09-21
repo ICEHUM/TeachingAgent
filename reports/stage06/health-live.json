@@ -1,0 +1,9 @@
+{
+  "teacher_status": 200,
+  "student_status": 403,
+  "business_database": "normal",
+  "execution_environment": "normal",
+  "teaching_flow": "normal",
+  "model_service": "normal",
+  "secret_fields_present": false
+}

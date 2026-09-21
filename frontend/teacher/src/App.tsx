@@ -14,6 +14,7 @@ const waitText = (seconds: number) => seconds >= 3600 ? `${Math.floor(seconds / 
 export function App() {
   const params = useMemo(() => new URLSearchParams(location.search), []);
   const userId = params.get("user") || params.get("user_id") || "";
+  const healthRequested = params.get("view") === "health";
   const [classroom, setClassroom] = useState<Classroom | null>(null);
   const [group, setGroup] = useState<GroupKey>("attention");
   const [selected, setSelected] = useState<string | null>(null);
@@ -112,6 +113,7 @@ export function App() {
   }
 
   if (!userId) return <Setup />;
+  if (healthRequested) return <DemoHealthView userId={userId} />;
   if (loading) return <Loading />;
   if (error || !classroom) return <Fatal message={error || "课堂工作台不可用"} retry={() => { setLoading(true); void loadClassroom(); }} />;
   if (reviewId) return <div className="teacher-app"><header className="topbar"><div className="brand"><span className="brand-mark">AI</span><strong>教师课堂台</strong></div></header><ReviewView userId={userId} submissionId={reviewId} onBack={() => { setReviewId(null); void loadClassroom(); }} /></div>;
@@ -122,7 +124,7 @@ export function App() {
     <header className="topbar">
       <div className="brand"><span className="brand-mark">AI</span><strong>教师课堂台</strong></div>
       <div className="course-context"><b>AI 应用开发实训</b><span>FAQ-001-v1 · 当前课堂</span></div>
-      <div className="top-actions"><span className={`connection ${connection}`}><i />{connection === "connected" ? "自动更新" : connection === "offline" ? "网络断开" : "正在重连"}{lastUpdated && <small>· {time(lastUpdated.toISOString())}</small>}</span><span className="avatar" aria-label={`当前教师：${classroom.teacher.display_name}`}>{classroom.teacher.display_name.slice(0, 1)}</span></div>
+      <div className="top-actions"><a className="health-link" href={`?user=${encodeURIComponent(userId)}&view=health`}>演示健康</a><span className={`connection ${connection}`}><i />{connection === "connected" ? "自动更新" : connection === "offline" ? "网络断开" : "正在重连"}{lastUpdated && <small>· {time(lastUpdated.toISOString())}</small>}</span><span className="avatar" aria-label={`当前教师：${classroom.teacher.display_name}`}>{classroom.teacher.display_name.slice(0, 1)}</span></div>
     </header>
     <main className="teacher-layout">
       <section className="classroom-list" aria-label="课堂学生列表">
@@ -196,3 +198,27 @@ function DetailLoading() { return <div className="detail-loading"><i/><span>正�
 function Loading() { return <div className="page-loading"><div className="loading-brand"><span className="brand-mark">AI</span><strong>教师课堂台</strong></div><div className="skeleton"><i/><i/></div><p>正在从业务数据库读取课堂状态…</p></div>; }
 function Setup() { return <main className="setup-state"><span className="brand-mark">AI</span><h1>打开教师课堂台</h1><p>请从课程入口进入，当前页面没有收到教师身份上下文。</p></main>; }
 function Fatal({ message, retry }: { message: string; retry: () => void }) { return <main className="setup-state"><span className="error-mark">!</span><h1>课堂台暂时无法载入</h1><p>{message}</p><button className="primary-retry" onClick={retry}>重新连接</button></main>; }
+
+
+type HealthStatus = "normal" | "degraded" | "unavailable";
+type DemoHealth = { business_database: HealthStatus; execution_environment: HealthStatus; teaching_flow: HealthStatus; model_service: HealthStatus };
+const healthLabels: Record<keyof DemoHealth, string> = { business_database: "业务数据库", execution_environment: "执行环境", teaching_flow: "教学流程", model_service: "模型服务" };
+const healthStatusLabels: Record<HealthStatus, string> = { normal: "正常", degraded: "降级", unavailable: "不可用" };
+
+function DemoHealthView({ userId }: { userId: string }) {
+  const [health, setHealth] = useState<DemoHealth | null>(null);
+  const [error, setError] = useState("");
+  const loadHealth = useCallback(async () => {
+    setError("");
+    try { setHealth(await api<DemoHealth>("/api/product/teacher/demo-health", userId)); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "健康状态读取失败"); }
+  }, [userId]);
+  useEffect(() => { void loadHealth(); }, [loadHealth]);
+  return <div className="teacher-app">
+    <header className="topbar"><div className="brand"><span className="brand-mark">AI</span><strong>演示健康</strong></div><div className="top-actions"><a className="health-link" href={`?user=${encodeURIComponent(userId)}`}>返回课堂台</a></div></header>
+    <main className="demo-health-page"><header><span>DEMO PREFLIGHT</span><h1>演示环境健康状态</h1><p>仅呈现可用性，不显示密钥、路径、容器或数据库凭据。</p></header>
+      {error ? <section className="health-error"><strong>状态不可用</strong><p>{error}</p><button className="refresh" onClick={() => void loadHealth()}>重新检查</button></section> : !health ? <section className="health-loading">正在检查四个服务域…</section> : <section className="health-grid">{(Object.keys(healthLabels) as Array<keyof DemoHealth>).map((key) => <article key={key}><div><span className={`health-dot ${health[key]}`} aria-hidden="true"/><h2>{healthLabels[key]}</h2></div><b className={`health-state ${health[key]}`}>{healthStatusLabels[health[key]]}</b></article>)}</section>}
+      <footer><strong>进入演示前仍须运行 CLI Preflight。</strong><span>存在 FAIL 时禁止进入演示状态。</span></footer>
+    </main>
+  </div>;
+}
