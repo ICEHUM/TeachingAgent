@@ -4,6 +4,7 @@ import type { Evaluation } from "./types";
 
 const statusLabel = (status: string) => ({ SATISFIED: "已满足", NOT_SATISFIED: "未满足", INFRASTRUCTURE_ERROR: "环境异常", NOT_RUN: "未运行" }[status] || status);
 const helpLabel = (level?: string) => ({ L0: "引导", L1: "定位", L2: "局部示例" }[level || ""] || "指导");
+const versionLabel = (value?: string | null) => value ? value.replace(/^Snapshot\s+/i, "版本 ") : "尚未创建";
 
 export function SubmitViews({
   userId,
@@ -51,7 +52,7 @@ export function SubmitViews({
     } finally { setBusy(false); }
   }
 
-  if (loading) return <div className="eval-loading"><i /><span>正在读取将要提交的 Snapshot 与验收证据…</span></div>;
+  if (loading) return <div className="eval-loading"><i /><span>正在读取将要提交的代码版本与验收证据…</span></div>;
   if (error || !data) return <div className="eval-empty"><strong>提交页暂时无法载入</strong><p>{error || "没有可提交的版本"}</p><button className="button" onClick={onBack}>返回工作台</button></div>;
 
   const submitted = Boolean(data.submission.id);
@@ -62,9 +63,9 @@ export function SubmitViews({
       <button className="button quiet" onClick={onBack}>返回工作台</button>
       <div className="eval-toolbar-copy">
         <strong>{recap ? "学习复盘" : "确认提交"}</strong>
-        <p><span>评价针对</span><span className="snapshot-chip">{data.submission.snapshot_label}</span><span>后续编辑不会改写本次提交</span></p>
+        <p><span>评价针对</span><span className="snapshot-chip">{versionLabel(data.submission.snapshot_label)}</span><span>后续编辑不会改写本次提交</span></p>
       </div>
-      {!recap && <button className="button primary" onClick={() => void submit()} disabled={busy || !data.submission.snapshot_id}>{busy ? "提交中…" : "确认提交当前 Snapshot"}</button>}
+      {!recap && <button className="button primary" onClick={() => void submit()} disabled={busy || !data.submission.snapshot_id}>{busy ? "提交中…" : "确认提交当前版本"}</button>}
       {recap && data.formal_grade && <span className="status-badge completed">教师已确认 {data.formal_grade.total_score}/{data.formal_grade.max_score}</span>}
       {recap && !data.formal_grade && <span className="status-badge waiting">等待教师评价</span>}
     </div>
@@ -72,8 +73,8 @@ export function SubmitViews({
     <div className="eval-layout">
       <section className="eval-main" aria-label="提交作品与证据">
         <article className="eval-block">
-          <header><h2>将被提交的版本</h2><span>{data.submission.snapshot_label}</span></header>
-          <p>提交后仍可继续编辑，但教师评价只看这一版 Snapshot。</p>
+          <header><h2>将被提交的版本</h2><span>{versionLabel(data.submission.snapshot_label)}</span></header>
+          <p>提交后仍可继续编辑，但教师评价只看本次提交的代码版本。</p>
           <ul className="file-chips">{(data.files || []).map((file) => <li key={file.path}>{file.path}</li>)}</ul>
         </article>
         <article className="eval-block">

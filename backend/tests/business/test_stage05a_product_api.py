@@ -71,7 +71,7 @@ async def test_student_workspace_save_snapshot_and_real_workbench(tmp_path):
         await session.commit()
     source = manager.source_directory(attempt.id)
     original = "def retrieve(question, sources):\n    return []\n"
-    (source / "faq_app.py").write_text(original, encoding="utf-8")
+    (source / "app.py").write_text(original, encoding="utf-8")
     headers = {"X-User-Id": learner.id}
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -80,11 +80,11 @@ async def test_student_workspace_save_snapshot_and_real_workbench(tmp_path):
         )
         assert workbench.status_code == 200
         assert workbench.json()["stage"]["key"] == "implement_retrieval"
-        assert workbench.json()["files"][0]["path"] == "faq_app.py"
+        assert workbench.json()["files"][0]["path"] == "app.py"
 
         fixed = "def retrieve(question, sources):\n    return [item for item in sources if item['question'] == question]\n"
         saved = await client.put(
-            f"/api/product/attempts/{attempt.id}/files/faq_app.py",
+            f"/api/product/attempts/{attempt.id}/files/app.py",
             headers=headers,
             json={
                 "content": fixed,
@@ -98,13 +98,14 @@ async def test_student_workspace_save_snapshot_and_real_workbench(tmp_path):
             json={
                 "operation_id": "stage05-test-snapshot",
                 "expected_file_hash": saved.json()["hash"],
+                "expected_file_path": "app.py",
             },
         )
         assert snapshot.status_code == 200
         assert snapshot.json()["label"] == "Snapshot A"
 
         conflict = await client.put(
-            f"/api/product/attempts/{attempt.id}/files/faq_app.py",
+            f"/api/product/attempts/{attempt.id}/files/app.py",
             headers=headers,
             json={"content": fixed + "\n", "expected_hash": "stale"},
         )

@@ -78,8 +78,10 @@ class FileSave(BaseModel):
 
 
 class SnapshotCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     operation_id: str = Field(min_length=8, max_length=160)
     expected_file_hash: str | None = None
+    expected_file_path: str = Field(default="faq_app.py", min_length=1, max_length=240)
 
 
 class RunCreate(BaseModel):
@@ -498,10 +500,10 @@ async def create_snapshot(
         return {"id": item.id, "sequence": item.sequence, "label": _snapshot_label(item), "duplicate": True}
     manager = _manager(request)
     if body.expected_file_hash is not None:
-        faq_path = _relative_file(manager.source_directory(attempt.id), "faq_app.py")
-        current = faq_path.read_text(encoding="utf-8") if faq_path.exists() else ""
+        checked_path = _relative_file(manager.source_directory(attempt.id), body.expected_file_path)
+        current = checked_path.read_text(encoding="utf-8") if checked_path.exists() else ""
         if _file_hash(current) != body.expected_file_hash:
-            raise HTTPException(409, detail={"code": "snapshot_conflict", "message": "当前代码与已保存版本不一致"})
+            raise HTTPException(409, detail={"code": "snapshot_conflict", "message": "代码在保存后又发生了变化。请重新保存，再创建检查版本。"})
     sequence = int(await session.scalar(select(func.coalesce(func.max(Snapshot.sequence), 0)).where(Snapshot.attempt_id == attempt.id))) + 1
     snapshot_id = str(uuid4())
     _, snapshot_ref = manager.create_snapshot(attempt_id=attempt.id, snapshot_id=snapshot_id)
@@ -561,7 +563,7 @@ async def run_checks(
         raise HTTPException(403, "student_run_required")
     latest = await _latest_snapshot(session, attempt.id)
     if latest is None or latest.id != body.snapshot_id:
-        raise HTTPException(409, detail={"code": "old_snapshot", "message": "本次运行不是基于最新 Snapshot"})
+        raise HTTPException(409, detail={"code": "old_snapshot", "message": "当前代码已有更新。请创建新的检查版本后再运行。"})
     if attempt.state_version != body.expected_state_version:
         raise HTTPException(409, detail={"code": "stale_state_version", "message": "教学状态已更新，请刷新后重试"})
     try:
@@ -601,7 +603,7 @@ async def request_guidance(
         raise HTTPException(409, detail={"code": "ai_guidance_paused", "message": "教师已暂停智能指导"})
     latest = await _latest_snapshot(session, attempt.id)
     if latest is None or latest.id != body.snapshot_id:
-        raise HTTPException(409, detail={"code": "old_snapshot", "message": "请先基于当前代码创建 Snapshot"})
+        raise HTTPException(409, detail={"code": "old_snapshot", "message": "请先为当前代码创建检查版本。"})
     try:
         state = await _runtime(request).run_event(
             attempt_id=attempt.id,
@@ -885,8 +887,8 @@ def _product_fail(error: BusinessRuleError) -> HTTPException:
     code = str(error)
     messages = {
         "student_submit_required": "只有该 Attempt 的学生可以提交作品",
-        "snapshot_attempt_mismatch": "Snapshot 不属于当前任务尝试",
-        "stale_snapshot": "提交必须绑定当前最新 Snapshot",
+        "snapshot_attempt_mismatch": "检查版本不属于当前任务",
+        "stale_snapshot": "提交必须使用最新检查版本",
         "review_already_published": "评价已发布，不能再覆盖草稿",
         "unknown_rubric_item": "量规项不存在",
         "formal_grade_not_writable": "正式成绩不能由请求体或 AI 建议写入",
@@ -968,7 +970,7 @@ async def latest_submission_view(
     if submission is None:
         latest = await _latest_snapshot(session, attempt.id)
         if latest is None:
-            raise HTTPException(409, detail={"code": "snapshot_required", "message": "请先创建 Snapshot 再提交"})
+            raise HTTPException(409, detail={"code": "snapshot_required", "message": "请先保存并创建检查版本，再提交。"})
         preview = Submission(
             id="",
             attempt_id=attempt.id,
