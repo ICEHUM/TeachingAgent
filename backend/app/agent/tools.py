@@ -100,11 +100,13 @@ raise SystemExit(0 if payload["passed"] else 2)
 FAQ_TESTS = r'''
 import importlib.util
 import json
+import traceback
 from pathlib import Path
 
 program = Path("/workspace/student/faq_app.py")
 source_path = Path("/workspace/student/data/faq.json")
 checks = []
+error = ""
 try:
     spec = importlib.util.spec_from_file_location("student_faq_app", program)
     module = importlib.util.module_from_spec(spec)
@@ -122,9 +124,10 @@ try:
     checks.append({"code": "basic_citation_present", "passed": citation_ok})
 except Exception as exc:
     checks.append({"code": "runtime_error", "passed": False, "detail": type(exc).__name__})
+    error = traceback.format_exc(limit=8)[-2400:]
 failed = [item["code"] for item in checks if not item["passed"]]
 code = "passed" if not failed else ("empty_retrieval" if "known_question_hit" in failed else failed[0])
-payload = {"passed": not failed, "code": code, "checks": checks}
+payload = {"passed": not failed, "code": code, "checks": checks, "error": error}
 print("__TEACHING_EVIDENCE__=" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
 raise SystemExit(0 if payload["passed"] else 2)
 '''
@@ -136,10 +139,12 @@ RETRIEVAL_TESTS = FAQ_TESTS
 CITATION_TESTS = r'''
 import importlib.util
 import json
+import traceback
 from pathlib import Path
 spec = importlib.util.spec_from_file_location("student_faq_app", Path("/workspace/student/faq_app.py"))
 module = importlib.util.module_from_spec(spec)
 checks = []
+error = ""
 try:
     spec.loader.exec_module(module)
     sources = module.load_sources("/workspace/student/data/faq.json")
@@ -151,7 +156,8 @@ try:
     checks.append({"code": "basic_citation_present", "passed": passed})
 except Exception as exc:
     checks.append({"code": "runtime_error", "passed": False, "detail": type(exc).__name__})
-payload = {"passed": all(item["passed"] for item in checks), "checks": checks}
+    error = traceback.format_exc(limit=8)[-2400:]
+payload = {"passed": all(item["passed"] for item in checks), "checks": checks, "error": error}
 payload["code"] = "passed" if payload["passed"] else checks[0]["code"]
 print("__TEACHING_EVIDENCE__=" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
 raise SystemExit(0 if payload["passed"] else 2)
@@ -161,11 +167,13 @@ raise SystemExit(0 if payload["passed"] else 2)
 POLICY_FAQ_TESTS = r'''
 import importlib.util
 import json
+import traceback
 from pathlib import Path
 
 program = Path("/workspace/student/faq_app.py")
 source_path = Path("/workspace/student/data/faq.json")
 checks = []
+error = ""
 try:
     spec = importlib.util.spec_from_file_location("student_policy_faq", program)
     module = importlib.util.module_from_spec(spec)
@@ -189,9 +197,10 @@ try:
     checks.append({"code": "local_rule_scope_preserved", "passed": local_scope_ok})
 except Exception as exc:
     checks.append({"code": "runtime_error", "passed": False, "detail": type(exc).__name__})
+    error = traceback.format_exc(limit=8)[-2400:]
 failed = [item["code"] for item in checks if not item["passed"]]
 code = "passed" if not failed else ("empty_retrieval" if "known_question_hit" in failed else failed[0])
-payload = {"passed": not failed, "code": code, "checks": checks}
+payload = {"passed": not failed, "code": code, "checks": checks, "error": error}
 print("__TEACHING_EVIDENCE__=" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
 raise SystemExit(0 if payload["passed"] else 2)
 '''
@@ -200,11 +209,13 @@ raise SystemExit(0 if payload["passed"] else 2)
 POLICY_CITATION_TESTS = r'''
 import importlib.util
 import json
+import traceback
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location("student_policy_faq", Path("/workspace/student/faq_app.py"))
 module = importlib.util.module_from_spec(spec)
 checks = []
+error = ""
 try:
     spec.loader.exec_module(module)
     sources = module.load_sources("/workspace/student/data/faq.json")
@@ -219,7 +230,8 @@ try:
     checks.append({"code": "authoritative_citation_present", "passed": citation_ok})
 except Exception as exc:
     checks.append({"code": "runtime_error", "passed": False, "detail": type(exc).__name__})
-payload = {"passed": all(item["passed"] for item in checks), "checks": checks}
+    error = traceback.format_exc(limit=8)[-2400:]
+payload = {"passed": all(item["passed"] for item in checks), "checks": checks, "error": error}
 payload["code"] = "passed" if payload["passed"] else checks[0]["code"]
 print("__TEACHING_EVIDENCE__=" + json.dumps(payload, ensure_ascii=False, sort_keys=True))
 raise SystemExit(0 if payload["passed"] else 2)

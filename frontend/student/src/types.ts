@@ -57,4 +57,11 @@ export type Evaluation = {
 };
 
 export type FilePayload = { path: string; content: string; hash: string; size: number };
-export type Evidence = { snapshot: string; operation: string; tool: string; requirement: string; status: string; reason_code: string; observed_at: string; stdout_summary: string; stdout_truncated: boolean; artifacts: Array<{ kind: string; ref: string; available: boolean }> };
+export type Evidence = {
+  snapshot: string; operation: string; tool: string; requirement: string; status: string;
+  reason_code: string; observed_at: string; stdout_summary: string; stdout_truncated: boolean;
+  checks?: Array<{ code: string; passed: boolean; detail?: string }>;
+  error_summary?: string;
+  location?: { file: string; line: number } | null;
+  artifacts: Array<{ kind: string; ref: string; available: boolean }>;
+};

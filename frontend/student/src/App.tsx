@@ -10,19 +10,24 @@ type RunState = "idle" | "queued" | "running" | "timeout" | "failed";
 const helpLabel = (level?: string) => ({ L0: "引导", L1: "定位", L2: "局部示例" }[level || ""] || "引导");
 const statusLabel = (status: string) => ({ SATISFIED: "已满足", NOT_SATISFIED: "未满足", INFRASTRUCTURE_ERROR: "环境异常", NOT_RUN: "未运行" }[status] || status);
 const kindLabel = (kind: string) => ({ AUTO_TEST: "自动测试", STATIC_CHECK: "静态检查", STUDENT_EXPLANATION: "学习观察", TEACHER_REVIEW: "教师复核", TRANSFER_TASK: "迁移任务" }[kind] || kind.replaceAll("_", " "));
-type EvidenceCheck = { code?: string; passed?: boolean };
+type EvidenceCheck = { code?: string; passed?: boolean; detail?: string };
 const evidenceCheckLabels: Record<string, string> = {
   sources_loaded: "资料已成功加载",
   known_question_hit: "已知问题能够命中",
   unknown_question_no_fabrication: "未知问题不会伪造命中",
   basic_citation_present: "回答包含基础引用",
+  authoritative_citation_present: "回答保留权威来源",
+  local_rule_scope_preserved: "地方规则适用范围正确",
+  runtime_error: "程序运行时发生错误",
 };
 const evidenceReasonCopy: Record<string, { title: string; detail: string }> = {
   empty_retrieval: { title: "已知问题没有检索到资料", detail: "资料加载正常，但检索链路返回空结果。请从查询文本、匹配条件和结果过滤三个位置继续定位。" },
   sources_load_failed: { title: "资料未能正常加载", detail: "检查资料路径、文件格式和读取编码后，保存并创建新的检查版本，再运行验收。" },
   missing_citation: { title: "回答缺少可核对的来源", detail: "回答内容已经生成，但没有提供满足任务要求的资料来源。" },
   unknown_question_fabrication: { title: "未知问题出现了无依据回答", detail: "边界问题没有可靠资料命中时，应明确返回无法回答，而不是生成猜测内容。" },
+  runtime_error: { title: "程序运行时发生错误", detail: "先查看下方文件、行号和报错信息，修复后重新运行。" },
 };
+const EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 function parseEvidenceChecks(summary: string): EvidenceCheck[] {
   const marker = "__TEACHING_EVIDENCE__=";
   if (!summary.includes(marker)) return [];
@@ -65,8 +70,9 @@ export function App() {
   const [runSnapshot, setRunSnapshot] = useState<string | null>(null);
   const [oldSnapshotNotice, setOldSnapshotNotice] = useState(false);
   const [observation, setObservation] = useState("");
-  const [bottomTab, setBottomTab] = useState<"result" | "requirements" | "preview">("requirements");
+  const [bottomTab, setBottomTab] = useState<"result" | "requirements">("result");
   const [evidence, setEvidence] = useState<Evidence | null>(null);
+  const [runEvidence, setRunEvidence] = useState<Evidence | null>(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [coachLoading, setCoachLoading] = useState(false);
   const [connection, setConnection] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
@@ -74,12 +80,20 @@ export function App() {
   const [coachOpen, setCoachOpen] = useState(false);
   const [taskCollapsed, setTaskCollapsed] = useState(false);
   const [resultCollapsed, setResultCollapsed] = useState(false);
+  const [needsSnapshot, setNeedsSnapshot] = useState(false);
+  const [fileAction, setFileAction] = useState<"create" | "rename" | "delete" | null>(null);
+  const [filePathInput, setFilePathInput] = useState("");
   const [view, setView] = useState<"workbench" | "submit" | "recap">(params.get("view") === "recap" ? "recap" : params.get("view") === "submit" ? "submit" : "workbench");
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const saveRef = useRef<() => Promise<string | false>>(async () => false);
   const stageRef = useRef<string | null>(null);
   const coachButtonRef = useRef<HTMLButtonElement | null>(null);
   const coachPanelRef = useRef<HTMLElement | null>(null);
+  const runEvidenceRequirement = data?.requirements.find((item) =>
+    item.snapshot_id === data.latest_snapshot?.id
+    && item.operation_id
+    && item.kind !== "STUDENT_EXPLANATION"
+  );
 
   const load = useCallback(async () => {
     if (!userId || !attemptId) { setLoading(false); return; }
@@ -110,6 +124,15 @@ export function App() {
   }, [attemptId, userId]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const operationId = runEvidenceRequirement?.operation_id;
+    if (!operationId || !userId || !attemptId) { setRunEvidence(null); return; }
+    let active = true;
+    void api<Evidence>(`/api/product/attempts/${attemptId}/evidence/${encodeURIComponent(operationId)}`, userId)
+      .then((item) => { if (active) setRunEvidence(item); })
+      .catch(() => { if (active) setRunEvidence(null); });
+    return () => { active = false; };
+  }, [attemptId, runEvidenceRequirement?.operation_id, userId]);
   useEffect(() => {
     if (!data?.files.length) return;
     const target = data.files.some((item) => item.path === activeFile) ? activeFile : data.files[0].path;
@@ -186,6 +209,7 @@ export function App() {
         method: "PUT", body: JSON.stringify({ content, expected_hash: file.hash }),
       });
       setFile({ ...file, content, hash: result.hash, size: new TextEncoder().encode(content).length });
+      if (result.hash !== file.hash) setNeedsSnapshot(true);
       setSaveState("saved"); setToast("代码已保存"); return result.hash;
     } catch (error) {
       setSaveState("failed");
@@ -212,40 +236,92 @@ export function App() {
     URL.revokeObjectURL(url);
   }
 
-  async function snapshot() {
-    if (!file) return;
-    let expectedHash = file.hash;
-    if (saveState === "dirty" || saveState === "failed") {
-      const savedHash = await save(); if (!savedHash) return;
-      expectedHash = savedHash;
-    }
+  async function createCheckVersion(expectedHash: string) {
+    if (!file) return null;
     try {
-      await api(`/api/product/attempts/${attemptId}/snapshots`, userId, {
+      const created = await api<{ id: string; label: string }>(`/api/product/attempts/${attemptId}/snapshots`, userId, {
         method: "POST", body: JSON.stringify({ operation_id: newOperation("ui-snapshot"), expected_file_hash: expectedHash, expected_file_path: file.path }),
       });
-      setToast("已创建检查版本，运行检查将使用这一版代码"); await load();
-    } catch (error) { setToast(error instanceof Error ? error.message : "创建检查版本失败"); }
+      setNeedsSnapshot(false);
+      return created;
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "无法准备本次检查，请稍后重试");
+      return null;
+    }
   }
 
   async function run() {
-    if (!data?.latest_snapshot) { setToast("还没有可检查的代码版本。请先点击“保存并创建检查版本”。"); return; }
-    if (saveState !== "saved") { setToast("你修改了代码。请先点击“保存并创建检查版本”，再运行检查。"); return; }
-    setRunSnapshot(data.latest_snapshot.label); setOldSnapshotNotice(false); setRunMessage("等待可用执行资源…"); setRunState("queued");
+    if (!file || !data) return;
+    let expectedHash = file.hash;
+    const codeChanged = saveState === "dirty" || saveState === "failed";
+    if (codeChanged) {
+      const savedHash = await save();
+      if (!savedHash) return;
+      expectedHash = savedHash;
+    }
+    let targetSnapshot: { id: string; label: string } | null = data.latest_snapshot;
+    if (!targetSnapshot || codeChanged || needsSnapshot) {
+      targetSnapshot = await createCheckVersion(expectedHash);
+      if (!targetSnapshot) return;
+    }
+    setRunEvidence(null);
+    setRunSnapshot(targetSnapshot.label); setOldSnapshotNotice(false); setRunMessage("等待可用执行资源…"); setRunState("queued");
+    setBottomTab("result"); setResultCollapsed(false);
     await new Promise((resolve) => setTimeout(resolve, 220));
     setRunState("running"); setRunMessage("正在隔离工作区中运行 FAQ 验收…");
     try {
       const result = await api<{ last_tool_status: string; flow_status: string; guidance?: unknown }>(`/api/product/attempts/${attemptId}/runs`, userId, {
-        method: "POST", body: JSON.stringify({ operation_id: newOperation("ui-run"), snapshot_id: data.latest_snapshot.id, expected_state_version: data.attempt.state_version, observation }),
+        method: "POST", body: JSON.stringify({ operation_id: newOperation("ui-run"), snapshot_id: targetSnapshot.id, expected_state_version: data.attempt.state_version, observation }),
       });
       setRunState("idle");
-      setRunMessage(result.last_tool_status === "succeeded" ? "本次检查通过，验收结果已写入当前版本。" : result.last_tool_status === "infrastructure_failure" ? "运行环境异常，本次不计入学习失败次数。" : "检查完成：仍有验收项未满足，请查看证据。" );
-      await load(); setBottomTab("requirements"); setResultCollapsed(false);
+      setRunMessage(result.last_tool_status === "succeeded" ? "本次检查通过。" : result.last_tool_status === "infrastructure_failure" ? "运行环境异常，本次不计入学习失败次数。" : "检查未通过，请根据下方信息修改代码。" );
+      await load(); setBottomTab("result"); setResultCollapsed(false);
     } catch (error) {
       const apiError = error instanceof ApiError ? error : null;
       setRunState(apiError?.code === "timeout" ? "timeout" : "failed");
       setRunMessage(apiError?.code === "openhands_unavailable" ? "OpenHands 暂不可用，本次不计入学生错误。" : apiError?.message || "运行失败，请检查连接后重试。");
       await load();
     }
+  }
+
+  async function createFile() {
+    const path = filePathInput.trim().replaceAll("\\", "/");
+    if (!path) return;
+    try {
+      await api(`/api/product/attempts/${attemptId}/files/${encodeURIComponent(path).replaceAll("%2F", "/")}`, userId, {
+        method: "PUT", body: JSON.stringify({ content: "", expected_hash: EMPTY_SHA256 }),
+      });
+      setFileAction(null); setFilePathInput(""); setNeedsSnapshot(true);
+      await load(); await loadFile(path); setToast(`已新建 ${path}`);
+    } catch (error) { setToast(error instanceof Error ? error.message : "新建文件失败"); }
+  }
+
+  async function renameFile() {
+    if (!file) return;
+    const path = filePathInput.trim().replaceAll("\\", "/");
+    if (!path || path === file.path) return;
+    if (saveState !== "saved") { setToast("请先保存当前文件，再重命名"); return; }
+    try {
+      await api(`/api/product/attempts/${attemptId}/files/${encodeURIComponent(file.path).replaceAll("%2F", "/")}`, userId, {
+        method: "PATCH", body: JSON.stringify({ target_path: path, expected_hash: file.hash }),
+      });
+      setFileAction(null); setFilePathInput(""); setActiveFile(path); setFile(null); setNeedsSnapshot(true);
+      await load(); await loadFile(path); setToast(`已重命名为 ${path}`);
+    } catch (error) { setToast(error instanceof Error ? error.message : "重命名失败"); }
+  }
+
+  async function deleteFile() {
+    if (!file) return;
+    if (saveState !== "saved") { setToast("请先保存当前文件，再删除"); return; }
+    try {
+      await api(`/api/product/attempts/${attemptId}/files/${encodeURIComponent(file.path).replaceAll("%2F", "/")}`, userId, {
+        method: "DELETE", body: JSON.stringify({ expected_hash: file.hash }),
+      });
+      const deletedPath = file.path;
+      const fallback = data?.files.find((item) => item.path !== deletedPath)?.path || "";
+      setFileAction(null); setFilePathInput(""); setFile(null); setContent(""); setActiveFile(fallback); setNeedsSnapshot(true);
+      await load(); if (fallback) await loadFile(fallback); setToast(`已删除 ${deletedPath}`);
+    } catch (error) { setToast(error instanceof Error ? error.message : "删除文件失败"); }
   }
 
   async function guidance() {
@@ -309,22 +385,27 @@ export function App() {
       <section className={`code-pane ${resultCollapsed ? "result-collapsed" : ""}`} aria-label="Workspace 代码区">
         <div className="workspace-toolbar">
           <div className="file-context"><span className="workspace-label">Workspace</span><strong>{activeFile}</strong></div>
-          <div className="version-context" aria-label="当前版本状态"><span>检查使用的版本</span><b>{versionLabel(data.latest_snapshot?.label)}</b></div>
-          <div className="toolbar-actions"><button className="button quiet" onClick={() => void save()} disabled={saveState === "saving" || saveState === "saved"}>保存 <kbd>Ctrl S</kbd></button><button className="button secondary" onClick={() => void snapshot()} disabled={saveState === "saving"} title="保存当前代码，并固定为下一次检查使用的版本">保存并创建检查版本</button><button className={`button primary ${runState === "queued" || runState === "running" ? "is-running" : ""}`} onClick={() => void run()} disabled={runState === "queued" || runState === "running" || waitingTeacher}>{runState === "queued" ? "运行排队" : runState === "running" ? "运行中…" : "运行检查"}</button></div>
+          <div className="version-context" aria-label="当前检查状态"><span>最近一次检查</span><b>{versionLabel(data.latest_snapshot?.label)}</b><small>运行时会自动保存当前代码</small></div>
+          <div className="toolbar-actions"><button className="button quiet" onClick={() => void save()} disabled={saveState === "saving" || saveState === "saved"}>保存 <kbd>Ctrl S</kbd></button><button className={`button primary ${runState === "queued" || runState === "running" ? "is-running" : ""}`} onClick={() => void run()} disabled={runState === "queued" || runState === "running" || waitingTeacher}>{runState === "queued" ? "运行排队" : runState === "running" ? "运行中…" : "运行检查"}</button></div>
           <p className="mobile-ide-note">手机适合查看任务、反馈与求助；完整编码建议使用电脑。</p>
         </div>
         <div className="editor-zone">
-          <nav className="file-tree" aria-label="文件列表">{data.files.map((item) => <button key={item.path} className={item.path === activeFile ? "active" : ""} onClick={() => { if (saveState === "dirty" && !confirm("当前文件有未保存修改，仍要切换吗？")) return; void loadFile(item.path); }}><span className="file-ext">{item.name.split(".").pop()?.toUpperCase()}</span><span>{item.path}</span></button>)}</nav>
+          <nav className="file-tree" aria-label="文件列表">
+            <div className="file-tree-head"><strong>文件</strong><div><button onClick={() => { setFileAction("create"); setFilePathInput(""); }} aria-label="新建文件" title="新建文件">＋</button><button onClick={() => { setFileAction("rename"); setFilePathInput(file?.path || ""); }} disabled={!file} aria-label="重命名当前文件" title="重命名当前文件">✎</button><button onClick={() => setFileAction("delete")} disabled={!file} aria-label="删除当前文件" title="删除当前文件">×</button></div></div>
+            {fileAction && <div className={`file-action ${fileAction}`}>
+              {fileAction === "delete" ? <><strong>删除 {file?.path}？</strong><p>此操作只删除当前练习区中的文件。</p><div><button onClick={() => setFileAction(null)}>取消</button><button className="danger" onClick={() => void deleteFile()}>确认删除</button></div></> : <><label htmlFor="file-path">{fileAction === "create" ? "新文件路径" : "重命名为"}</label><input id="file-path" autoFocus value={filePathInput} onChange={(event) => setFilePathInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void (fileAction === "create" ? createFile() : renameFile()); if (event.key === "Escape") setFileAction(null); }} placeholder="例如 utils/helper.py"/><small>支持 .py、.json、.md、.txt、.toml、.yaml</small><div><button onClick={() => setFileAction(null)}>取消</button><button className="confirm" disabled={!filePathInput.trim()} onClick={() => void (fileAction === "create" ? createFile() : renameFile())}>{fileAction === "create" ? "新建" : "重命名"}</button></div></>}
+            </div>}
+            <div className="file-list">{data.files.map((item) => <button key={item.path} className={item.path === activeFile ? "active" : ""} onClick={() => { if (saveState === "dirty" && !confirm("当前文件有未保存修改，仍要切换吗？")) return; void loadFile(item.path); }}><span className="file-ext">{item.name.split(".").pop()?.toUpperCase()}</span><span>{item.path}</span></button>)}</div>
+          </nav>
           <div className="editor-frame" aria-label={`${activeFile} 代码编辑器`}>
             <div className="editor-tab"><span>{activeFile}</span>{saveState === "dirty" && <i aria-label="未保存" />}</div>
             <Editor height="100%" language={activeFile.endsWith(".py") ? "python" : activeFile.endsWith(".json") ? "json" : "markdown"} value={content} onMount={onMount} onChange={(value) => { setContent(value || ""); setSaveState("dirty"); if (runState === "running") setOldSnapshotNotice(true); }} loading={<EditorLoading />} options={{ minimap: { enabled: false }, fontSize: 14, fontFamily: "Cascadia Code, Consolas, monospace", lineHeight: 22, renderLineHighlight: "line", padding: { top: 12 }, scrollBeyondLastLine: false, wordWrap: "off", automaticLayout: true, tabSize: 4, ariaLabel: `${activeFile} 代码编辑器` }} />
           </div>
         </div>
         <div className="result-panel">
-          <div className="result-head"><div className="tabs" role="tablist" aria-label="运行与验收"><button role="tab" aria-selected={bottomTab === "result"} onClick={() => { setBottomTab("result"); setResultCollapsed(false); }}>运行结果</button><button role="tab" aria-selected={bottomTab === "requirements"} onClick={() => { setBottomTab("requirements"); setResultCollapsed(false); }}>验收 <span>{data.requirement_summary.satisfied_count}/{data.requirement_summary.required_count}</span></button><button role="tab" aria-selected={bottomTab === "preview"} onClick={() => { setBottomTab("preview"); setResultCollapsed(false); }}>成果预览</button></div><button className="result-toggle" aria-expanded={!resultCollapsed} onClick={() => setResultCollapsed((value) => !value)}>{resultCollapsed ? "展开结果" : "收起结果"}</button></div>
-          {bottomTab === "result" && <div className="result-content" role="tabpanel"><RunStateView state={runState} message={runMessage} snapshot={runSnapshot || data.latest_snapshot?.label || ""} /></div>}
+          <div className="result-head"><div className="tabs" role="tablist" aria-label="运行与验收"><button role="tab" aria-selected={bottomTab === "result"} onClick={() => { setBottomTab("result"); setResultCollapsed(false); }}>运行结果</button><button role="tab" aria-selected={bottomTab === "requirements"} onClick={() => { setBottomTab("requirements"); setResultCollapsed(false); }}>验收 <span>{data.requirement_summary.satisfied_count}/{data.requirement_summary.required_count}</span></button></div><button className="result-toggle" aria-expanded={!resultCollapsed} onClick={() => setResultCollapsed((value) => !value)}>{resultCollapsed ? "展开结果" : "收起结果"}</button></div>
+          {bottomTab === "result" && <div className="result-content" role="tabpanel"><RunStateView state={runState} message={runMessage} snapshot={runSnapshot || data.latest_snapshot?.label || ""} evidence={runEvidence} onOpen={() => { if (runEvidence) setEvidence(runEvidence); }} /></div>}
           {bottomTab === "requirements" && <div className="requirement-checklist" role="tabpanel"><div className="checklist-summary"><div><strong>当前阶段验收</strong><span>{data.requirement_summary.satisfied ? "全部要求已满足" : `${data.requirement_summary.required_count - data.requirement_summary.satisfied_count} 项仍需完成`}</span></div><b>{data.requirement_summary.satisfied_count}<small> / {data.requirement_summary.required_count}</small></b></div><div className="checklist-items">{data.requirements.map((item) => <button className={`checklist-item ${item.status.toLowerCase()}`} key={item.id} disabled={!item.operation_id} onClick={() => void openEvidence(item)}><span className="check-state" aria-hidden="true">{item.status === "SATISFIED" ? "✓" : item.status === "NOT_SATISFIED" ? "×" : item.status === "INFRASTRUCTURE_ERROR" ? "!" : "·"}</span><span className="check-copy"><b>{item.name}</b><small>{kindLabel(item.kind)} · {item.evaluator}</small></span><span className="check-result"><b>{statusLabel(item.status)}</b><small>{item.snapshot_label ? versionLabel(item.snapshot_label) : "尚未生成检查结果"}{item.evaluated_at ? ` · ${formatTime(item.evaluated_at)}` : ""}</small>{item.has_old_result && <em>上一检查版本的结果，仅供查看</em>}</span></button>)}</div></div>}
-          {bottomTab === "preview" && <div className="preview-empty" role="tabpanel"><strong>FAQ 服务成果预览</strong><p>当前阶段通过后，这里将展示基于学生代码运行的问答结果。预览不会替代验收。</p><dl><div><dt>当前检查版本</dt><dd>{versionLabel(data.latest_snapshot?.label)}</dd></div><div><dt>阶段状态</dt><dd>{data.requirement_summary.satisfied ? "已满足" : `${data.requirement_summary.satisfied_count} / ${data.requirement_summary.required_count} 已满足`}</dd></div></dl></div>}
         </div>
       </section>
 
@@ -350,9 +431,19 @@ export function App() {
 
 function CoachSection({ label, children }: { label: string; children: React.ReactNode }) { return <section className="coach-section"><h3>{label}</h3>{children}</section>; }
 
-function RunStateView({ state, message, snapshot }: { state: RunState; message: string; snapshot: string }) {
-  const title = ({ idle: message ? "检查已完成" : "等待运行", queued: "运行排队", running: "正在运行", timeout: "运行超时", failed: "运行失败" } as const)[state];
-  return <div className={`run-state ${state}`}><div className="run-indicator" aria-hidden="true">{state === "running" || state === "queued" ? <i /> : state === "idle" && message ? "✓" : state === "idle" ? "·" : "!"}</div><div><strong>{title}</strong><p>{message || "先点击“保存并创建检查版本”，再点击“运行检查”。检查版本是本次验收使用的代码副本。"}</p><span>检查版本：{versionLabel(snapshot)}</span></div></div>;
+function RunStateView({ state, message, snapshot, evidence, onOpen }: { state: RunState; message: string; snapshot: string; evidence: Evidence | null; onOpen: () => void }) {
+  const failed = evidence?.status === "NOT_SATISFIED";
+  const passed = evidence?.status === "SATISFIED";
+  const reason = evidence ? evidenceReasonCopy[evidence.reason_code] : null;
+  const title = state === "queued" ? "运行排队" : state === "running" ? "正在运行" : state === "timeout" ? "运行超时" : state === "failed" ? "运行环境异常" : failed ? (evidence?.reason_code === "runtime_error" ? "程序运行错误" : "检查未通过") : passed ? "检查通过" : "准备运行";
+  const checks = evidence?.checks?.length ? evidence.checks : evidence ? parseEvidenceChecks(evidence.stdout_summary) : [];
+  return <div className={`run-state ${state} ${failed ? "has-errors" : passed ? "passed" : ""}`}>
+    <div className="run-summary"><div className="run-indicator" aria-hidden="true">{state === "running" || state === "queued" ? <i /> : passed ? "✓" : failed || state === "failed" || state === "timeout" ? "!" : "▶"}</div><div><strong>{title}</strong><p>{reason?.title || message || "点击“运行检查”，系统会自动保存代码并告诉你哪里需要修改。"}</p><span>本次代码：{versionLabel(snapshot)}</span></div></div>
+    {evidence?.location && <div className="run-error-location"><span>定位</span><b>{evidence.location.file}</b><em>第 {evidence.location.line} 行</em></div>}
+    {evidence?.error_summary && <pre className="runtime-error" aria-label="程序报错信息">{evidence.error_summary}</pre>}
+    {checks.length > 0 && <div className="run-check-list">{checks.map((check, index) => <div key={`${check.code}-${index}`} className={check.passed ? "passed" : "failed"}><span aria-hidden="true">{check.passed ? "✓" : "×"}</span><div><b>{evidenceCheckLabels[check.code || ""] || check.code || "检查项"}</b>{check.detail && <small>{check.detail}</small>}</div></div>)}</div>}
+    {evidence && <button className="run-evidence-link" onClick={onOpen}>查看完整证据</button>}
+  </div>;
 }
 
 function EvidenceDrawer({ evidence, loading, onClose }: { evidence: Evidence | null; loading: boolean; onClose: () => void }) {
@@ -373,12 +464,12 @@ function EvidenceDrawer({ evidence, loading, onClose }: { evidence: Evidence | n
     addEventListener("keydown", close);
     return () => { removeEventListener("keydown", close); requestAnimationFrame(() => previousFocus.current?.focus()); };
   }, [onClose]);
-  const checks = evidence ? parseEvidenceChecks(evidence.stdout_summary) : [];
+  const checks = evidence ? (evidence.checks?.length ? evidence.checks : parseEvidenceChecks(evidence.stdout_summary)) : [];
   const passed = evidence?.status === "SATISFIED";
   const reason = evidence ? evidenceReasonCopy[evidence.reason_code] || { title: passed ? "本项验收已经通过" : "检查结果未满足验收要求", detail: passed ? "当前检查版本已通过本项自动验收。" : "查看下方证据摘要和技术追溯信息，确定下一步修改范围。" } : null;
   return <div className="drawer-layer"><button className="drawer-backdrop" aria-label="关闭证据详情" onClick={onClose}/><aside ref={dialogRef} className="evidence-drawer" role="dialog" aria-modal="true" aria-labelledby="evidence-title"><header><div><h2 id="evidence-title">验收证据</h2><p>{evidence?.requirement || "正在读取教学事实"}</p></div><button className="icon-close" onClick={onClose} autoFocus aria-label="关闭">×</button></header>{loading || !evidence || !reason ? <div className="drawer-loading"><i/><span>正在读取有界证据…</span></div> : <div className="drawer-body">
     <section className={`evidence-conclusion ${passed ? "passed" : "failed"}`}><span className="conclusion-mark" aria-hidden="true">{passed ? "✓" : "×"}</span><div className="conclusion-copy"><span>教学结论</span><h3>{passed ? "当前要求已满足" : "当前要求尚未满足"}</h3><div className="conclusion-reason"><b>{passed ? "通过依据" : "失败原因"}</b><p>{reason.title}</p></div></div><b className="conclusion-snapshot">{evidence.snapshot}</b></section>
-    <section className="evidence-explanation"><h3>为什么得到这个结论</h3><p>{reason.detail}</p>{checks.length > 0 && <div className="evidence-checks">{checks.map((check, index) => <div key={`${check.code}-${index}`} className={check.passed ? "passed" : "failed"}><span aria-hidden="true">{check.passed ? "✓" : "×"}</span><div><b>{evidenceCheckLabels[check.code || ""] || check.code || "验收检查"}</b><small>{check.passed ? "检查通过" : "需要继续处理"}</small></div></div>)}</div>}</section>
+    <section className="evidence-explanation"><h3>为什么得到这个结论</h3><p>{reason.detail}</p>{evidence.location && <p className="evidence-location"><b>{evidence.location.file}</b> · 第 {evidence.location.line} 行</p>}{evidence.error_summary && <pre className="runtime-error">{evidence.error_summary}</pre>}{checks.length > 0 && <div className="evidence-checks">{checks.map((check, index) => <div key={`${check.code}-${index}`} className={check.passed ? "passed" : "failed"}><span aria-hidden="true">{check.passed ? "✓" : "×"}</span><div><b>{evidenceCheckLabels[check.code || ""] || check.code || "验收检查"}</b><small>{check.detail || (check.passed ? "检查通过" : "需要继续处理")}</small></div></div>)}</div>}</section>
     <section className="evidence-trace"><div className="trace-heading"><h3>技术追溯</h3><span>供教师与评审复核</span></div><dl><div><dt>检查版本</dt><dd>{versionLabel(evidence.snapshot)}</dd></div><div><dt>检查工具</dt><dd className="mono">{evidence.tool}</dd></div><div><dt>原因代码</dt><dd className="mono">{evidence.reason_code}</dd></div><div><dt>时间</dt><dd>{new Date(evidence.observed_at).toLocaleString("zh-CN")}</dd></div></dl><details className="trace-identifiers"><summary>操作与运行产物</summary><div><span>Operation</span><code>{evidence.operation}</code></div>{evidence.artifacts.map((artifact) => <div key={artifact.ref}><span>{artifact.kind}</span><code>{artifact.ref}</code><b>{artifact.available ? "可追溯" : "记录缺失"}</b></div>)}</details></section>
     <details className="raw-evidence"><summary>查看原始结构化输出</summary><pre>{evidence.stdout_summary || "本次工具未产生可展示的标准输出。"}</pre>{evidence.stdout_truncated && <p className="bounded-note">输出已按安全上限截断。</p>}</details>
     <footer>已隐藏宿主路径、容器令牌、模型密钥和内部数据库标识。</footer>

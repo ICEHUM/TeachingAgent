@@ -113,6 +113,35 @@ async def test_student_workspace_save_snapshot_and_real_workbench(tmp_path):
         )
         assert conflict.status_code == 409
         assert conflict.json()["detail"]["code"] == "snapshot_conflict"
+
+        empty_hash = hashlib.sha256(b"").hexdigest()
+        created = await client.put(
+            f"/api/product/attempts/{attempt.id}/files/utils/helper.py",
+            headers=headers,
+            json={"content": "", "expected_hash": empty_hash},
+        )
+        assert created.status_code == 200
+        assert created.json()["created"] is True
+
+        renamed = await client.patch(
+            f"/api/product/attempts/{attempt.id}/files/utils/helper.py",
+            headers=headers,
+            json={"target_path": "services/retrieval.py", "expected_hash": empty_hash},
+        )
+        assert renamed.status_code == 200
+        assert renamed.json()["path"] == "services/retrieval.py"
+        assert not (source / "utils").exists()
+        assert (source / "services" / "retrieval.py").is_file()
+
+        deleted = await client.request(
+            "DELETE",
+            f"/api/product/attempts/{attempt.id}/files/services/retrieval.py",
+            headers=headers,
+            json={"expected_hash": empty_hash},
+        )
+        assert deleted.status_code == 200
+        assert deleted.json() == {"deleted": True, "path": "services/retrieval.py"}
+        assert not (source / "services").exists()
     await app.state.business_engine.dispose()
 
 

@@ -6,6 +6,7 @@ import asyncio
 import difflib
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Any
@@ -74,6 +75,17 @@ MAX_FILE_BYTES = 512 * 1024
 
 class FileSave(BaseModel):
     content: str = Field(max_length=MAX_FILE_BYTES)
+    expected_hash: str
+
+
+class FileMove(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_path: str = Field(min_length=1, max_length=240)
+    expected_hash: str
+
+
+class FileDelete(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     expected_hash: str
 
 
@@ -489,6 +501,7 @@ async def save_file(
         raise HTTPException(403, "student_workspace_write_required")
     root = _manager(request).source_directory(attempt_id)
     path = _relative_file(root, file_path)
+    created = not path.exists()
     current = path.read_text(encoding="utf-8") if path.exists() else ""
     if _file_hash(current) != body.expected_hash:
         raise HTTPException(409, detail={"code": "snapshot_conflict", "message": "文件已在其他位置更新，请重新载入后再保存"})
@@ -496,7 +509,70 @@ async def save_file(
     temporary = path.with_name(path.name + ".saving")
     temporary.write_text(body.content, encoding="utf-8")
     temporary.replace(path)
-    return {"path": file_path, "hash": _file_hash(body.content), "saved_at": datetime.now(UTC).isoformat()}
+    return {
+        "path": file_path,
+        "hash": _file_hash(body.content),
+        "saved_at": datetime.now(UTC).isoformat(),
+        "created": created,
+    }
+
+
+@router.patch("/attempts/{attempt_id}/files/{file_path:path}")
+async def move_file(
+    attempt_id: str,
+    file_path: str,
+    body: FileMove,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id != user.id:
+        raise HTTPException(403, "student_workspace_write_required")
+    root = _manager(request).source_directory(attempt_id)
+    source = _relative_file(root, file_path)
+    target = _relative_file(root, body.target_path)
+    if not source.is_file():
+        raise HTTPException(404, "file_not_found")
+    current = source.read_text(encoding="utf-8")
+    if _file_hash(current) != body.expected_hash:
+        raise HTTPException(409, detail={"code": "file_conflict", "message": "文件已更新，请重新载入后再重命名"})
+    if target.exists():
+        raise HTTPException(409, detail={"code": "file_exists", "message": "目标文件已存在，请使用其他名称"})
+    target.parent.mkdir(parents=True, exist_ok=True)
+    source.replace(target)
+    parent = source.parent
+    while parent != root and not any(parent.iterdir()):
+        parent.rmdir()
+        parent = parent.parent
+    return {"path": body.target_path, "hash": _file_hash(current), "size": len(current.encode("utf-8"))}
+
+
+@router.delete("/attempts/{attempt_id}/files/{file_path:path}")
+async def delete_file(
+    attempt_id: str,
+    file_path: str,
+    body: FileDelete,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id != user.id:
+        raise HTTPException(403, "student_workspace_write_required")
+    root = _manager(request).source_directory(attempt_id)
+    path = _relative_file(root, file_path)
+    if not path.is_file():
+        raise HTTPException(404, "file_not_found")
+    current = path.read_text(encoding="utf-8")
+    if _file_hash(current) != body.expected_hash:
+        raise HTTPException(409, detail={"code": "file_conflict", "message": "文件已更新，请重新载入后再删除"})
+    path.unlink()
+    parent = path.parent
+    while parent != root and not any(parent.iterdir()):
+        parent.rmdir()
+        parent = parent.parent
+    return {"deleted": True, "path": file_path}
 
 
 @router.post("/attempts/{attempt_id}/snapshots")
@@ -715,6 +791,23 @@ async def evidence_detail(
         except (OSError, json.JSONDecodeError):
             artifact = {}
     request_data = artifact.get("request") if isinstance(artifact.get("request"), dict) else {}
+    details = artifact.get("details") if isinstance(artifact.get("details"), dict) else {}
+    structured = details.get("structured") if isinstance(details.get("structured"), dict) else {}
+    raw_checks = structured.get("checks") if isinstance(structured.get("checks"), list) else []
+    checks = [
+        {
+            "code": str(item.get("code") or "check"),
+            "passed": bool(item.get("passed")),
+            "detail": str(item.get("detail") or "")[:240],
+        }
+        for item in raw_checks
+        if isinstance(item, dict)
+    ]
+    raw_error = str(structured.get("error") or artifact.get("stderr") or "")[-2400:]
+    location_match = re.search(
+        r'File "/workspace/student/([^\"]+)", line (\d+)', raw_error
+    )
+    error_summary = raw_error.replace("/workspace/student/", "")
     bounded_stdout = str(artifact.get("stdout") or "")[:2400]
     return {
         "snapshot": _snapshot_label(snapshot),
@@ -726,6 +819,12 @@ async def evidence_detail(
         "observed_at": result.evaluated_at.isoformat(),
         "stdout_summary": bounded_stdout,
         "stdout_truncated": bool(artifact.get("stdout_truncated")) or len(str(artifact.get("stdout") or "")) > len(bounded_stdout),
+        "checks": checks,
+        "error_summary": error_summary,
+        "location": (
+            {"file": location_match.group(1), "line": int(location_match.group(2))}
+            if location_match else None
+        ),
         "artifacts": [
             {"kind": "证据清单", "ref": ref, "available": artifact_path.is_file()}
             for ref in result.evidence_refs

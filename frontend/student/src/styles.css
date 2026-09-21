@@ -676,3 +676,59 @@
 .coach-summary { margin-bottom: 10px !important; color: var(--text-primary) !important; }
 .coach-summary + .evidence-summary { margin-top: 10px; }
 .guidance-block.next p { color: var(--text-primary); font-weight: 600; }
+
+/* PILOT_FEEDBACK: code-first loop, visible runtime diagnostics, and real file actions. */
+.version-context small { display: block; margin-top: 3px; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.file-tree { display: flex; min-width: 0; flex-direction: column; overflow: hidden; padding: 0; }
+.file-tree-head { min-height: 38px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 10px; border-bottom: 1px solid var(--border); }
+.file-tree-head > strong { color: var(--text-secondary); font-size: 12px; }
+.file-tree-head > div { display: flex; gap: 2px; }
+.file-tree-head button { width: 28px; min-height: 28px; display: grid; place-items: center; padding: 0; font: 700 15px var(--font-ui); text-align: center; }
+.file-tree-head button:disabled { opacity: .4; cursor: not-allowed; }
+.file-list { min-height: 0; overflow: auto; padding: 6px; }
+.file-action { margin: 7px; padding: 9px; border: 1px solid var(--border-strong); border-radius: 7px; background: #fff; box-shadow: 0 8px 18px rgb(24 34 51 / .08); }
+.file-action label, .file-action > strong { display: block; color: var(--text-primary); font-size: 12px; font-weight: 700; }
+.file-action input { width: 100%; min-height: 32px; margin-top: 6px; padding: 0 7px; border: 1px solid var(--border-strong); border-radius: 5px; font: 12px var(--font-mono); outline: none; }
+.file-action input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(31 94 255 / .12); }
+.file-action small, .file-action p { display: block; margin: 6px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.file-action > div { display: flex; justify-content: flex-end; gap: 5px; margin-top: 8px; }
+.file-action > div button { width: auto; min-height: 28px; display: inline-flex; grid-template-columns: none; padding: 0 8px; border: 1px solid var(--border); background: #fff; font-family: var(--font-ui); }
+.file-action > div .confirm { border-color: var(--accent); background: var(--accent); color: #fff; }
+.file-action > div .danger { border-color: var(--danger); background: var(--danger); color: #fff; }
+.editor-zone { grid-template-columns: 184px minmax(0, 1fr); }
+
+.result-content { padding: 12px 14px; }
+.run-state { display: block; min-height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.run-summary { display: flex; align-items: flex-start; gap: 10px; }
+.run-summary > div:last-child { min-width: 0; }
+.run-state .run-summary strong { display: block; color: var(--text-primary); font-size: 14px; }
+.run-state .run-summary p { margin: 3px 0 5px; color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.run-state .run-summary span { color: var(--text-muted); font: 12px var(--font-mono); }
+.run-state.has-errors .run-indicator { background: var(--danger-soft); color: var(--danger); }
+.run-state.passed .run-indicator { background: var(--success-soft); color: var(--success); }
+.run-error-location { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 36px; color: var(--text-secondary); font-size: 12px; }
+.run-error-location span { padding: 2px 6px; border-radius: 4px; background: var(--danger-soft); color: var(--danger); font: 700 12px var(--font-ui); }
+.run-error-location b { font: 650 12px var(--font-mono); }
+.run-error-location em { color: var(--danger); font-style: normal; font-weight: 700; }
+.runtime-error { max-height: 150px; margin: 10px 0 0 36px; overflow: auto; padding: 10px 12px; border: 1px solid #e6b8b4; border-radius: 6px; background: #fff8f7; color: #74251f; font: 12px/1.55 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.run-check-list { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 12px 0 0 36px; padding-top: 10px; border-top: 1px solid var(--border); }
+.run-check-list > div { display: flex; align-items: flex-start; gap: 6px; min-width: 220px; color: var(--text-secondary); }
+.run-check-list > div > span { color: var(--success); font: 800 13px var(--font-ui); }
+.run-check-list > div.failed > span { color: var(--danger); }
+.run-check-list b { display: block; font-size: 12px; }
+.run-check-list small { display: block; max-width: 280px; margin-top: 2px; color: var(--text-muted); font: 12px/1.4 var(--font-mono); }
+.run-evidence-link { margin: 10px 0 0 36px; padding: 0; border: 0; background: transparent; color: var(--accent); font-size: 12px; font-weight: 650; cursor: pointer; }
+.run-evidence-link:hover { text-decoration: underline; }
+.evidence-location { padding: 8px 10px; border-left: 2px solid var(--danger); background: var(--danger-soft); font-family: var(--font-mono); }
+.evidence-explanation > .runtime-error { margin-left: 0; }
+
+@media (max-width: 767px) {
+  .version-context small { display: none; }
+  .file-tree-head { padding-inline: 5px; }
+  .file-tree-head > strong { display: none; }
+  .file-tree-head > div { width: 100%; justify-content: space-between; }
+  .file-tree-head button { width: 36px; min-height: 34px; }
+  .file-action { position: absolute; z-index: 4; left: 8px; width: min(300px, calc(100vw - 24px)); }
+  .file-list { padding: 4px; }
+  .runtime-error, .run-check-list, .run-error-location, .run-evidence-link { margin-left: 0; }
+}
