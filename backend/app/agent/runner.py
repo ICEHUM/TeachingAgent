@@ -23,7 +23,9 @@ from .workspace import (
     docker_command,
 )
 
-PINNED_IMAGE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9./:_-]*@sha256:[a-f0-9]{64}$")
+# An OCI archive can retain its image ID while Docker drops the registry digest on load.
+# Both references are content-addressed and reject mutable tags.
+PINNED_IMAGE = re.compile(r"^(?:[A-Za-z0-9][A-Za-z0-9./:_-]*@)?sha256:[a-f0-9]{64}$")
 DEFAULT_PYTHON_RUNNER_IMAGE = (
     "python@"
     "sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a"
@@ -54,7 +56,7 @@ class DockerPythonRunnerExecutor(OpenHandsExecutor):
 
     def __init__(self, image: str, manager: AttemptWorkspaceManager | None = None):
         if not PINNED_IMAGE.fullmatch(image):
-            raise ValueError("Runner image must use an immutable sha256 digest")
+            raise ValueError("Runner image must use an immutable sha256 reference")
         super().__init__(manager)
         self.image = image
 

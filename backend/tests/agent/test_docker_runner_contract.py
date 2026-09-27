@@ -23,6 +23,12 @@ def test_runner_rejects_mutable_image_tag() -> None:
         DockerPythonRunnerExecutor("python:3.12-slim")
 
 
+def test_runner_accepts_content_addressed_image_id_after_archive_import() -> None:
+    image = "sha256:" + "f" * 64
+    executor = DockerPythonRunnerExecutor(image)
+    assert executor.image == image
+
+
 def test_python_runner_is_default_and_can_be_explicitly_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHECKPOINT_DATABASE_URL", "postgresql://unused-local-checkpoint")
     monkeypatch.delenv("TEACHING_PYTHON_RUNNER_IMAGE", raising=False)
