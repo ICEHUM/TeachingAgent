@@ -111,6 +111,25 @@ def _tree_digest(directory: Path) -> str:
     return digest.hexdigest()
 
 
+def _prepare_snapshot_for_container(destination: Path) -> None:
+    """Expose only an immutable snapshot to the unprivileged container user."""
+    if destination.is_symlink():
+        raise ValueError("workspace snapshots cannot contain symbolic links")
+    for path in destination.rglob("*"):
+        if path.is_symlink():
+            raise ValueError("workspace snapshots cannot contain symbolic links")
+        if path.is_dir():
+            if os.name != "nt":
+                path.chmod(0o555)
+        elif path.is_file():
+            if os.name != "nt":
+                path.chmod(0o444)
+        else:
+            raise ValueError("workspace snapshots must contain only files and directories")
+    if os.name != "nt":
+        destination.chmod(0o555)
+
+
 class AttemptWorkspaceManager:
     """Keeps mutable student sources separate from immutable execution snapshots."""
 
@@ -142,10 +161,12 @@ class AttemptWorkspaceManager:
                 raise ValueError("workspace source cannot contain symbolic links")
         destination = self.snapshot_directory(attempt_id, snapshot_id)
         if destination.exists():
+            _prepare_snapshot_for_container(destination)
             digest = _tree_digest(destination)
             return destination, f"workspace://{_digest_id(attempt_id)}/{snapshot_id}#{digest}"
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(source, destination)
+        _prepare_snapshot_for_container(destination)
         digest = _tree_digest(destination)
         metadata = {
             "attempt_digest": _digest_id(attempt_id),
