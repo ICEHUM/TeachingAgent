@@ -5,9 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from app.agent.tools import POLICY_TOOL_CATALOG, TOOL_CATALOG, tool_catalog_for
+from app.agent.tools import (
+    POLICY_ANSWER_CITATION_TESTS,
+    POLICY_ANSWER_TESTS,
+    POLICY_TOOL_CATALOG,
+    TOOL_CATALOG,
+    tool_catalog_for,
+)
 from app.business.scenario_import import ScenarioValidationError, load_scenario
-
 
 ROOT = Path(__file__).resolve().parents[3]
 SCENARIO = ROOT / "scenarios" / "vocational-internship-policy-faq-v1"
@@ -26,6 +31,7 @@ def test_real_scenario_contract_is_reviewable_and_complete() -> None:
     assert sum(item["max_score"] for item in package.rubric) == 100
     assert len(package.source_manifest) == 3
     assert len(package.policy["civic_objectives"]) == 5
+    assert package.policy["allow_auto_l2"] is True
     assert "不按口号表述单独评分" in package.policy["value_assessment_boundary"]
     assert set(package.workspace_files) == {
         "faq_app.py",
@@ -33,6 +39,9 @@ def test_real_scenario_contract_is_reviewable_and_complete() -> None:
         "data/source_manifest.json",
         "README.md",
     }
+    starter = (SCENARIO / "starter" / "faq_app.py").read_text(encoding="utf-8")
+    assert "GENERIC_KEYWORDS" in starter
+    assert "matched_keywords" in starter
 
 
 def test_task_version_selects_server_owned_policy_tests() -> None:
@@ -42,6 +51,12 @@ def test_task_version_selects_server_owned_policy_tests() -> None:
         POLICY_TOOL_CATALOG["run_faq_tests"].command
         != TOOL_CATALOG["run_faq_tests"].command
     )
+    assert set(POLICY_TOOL_CATALOG) >= {
+        "validate_answer",
+        "validate_answer_citations",
+    }
+    compile(POLICY_ANSWER_TESTS, "<policy-answer-tests>", "exec")
+    compile(POLICY_ANSWER_CITATION_TESTS, "<policy-answer-citation-tests>", "exec")
 
 
 def test_scenario_loader_rejects_workspace_path_traversal(tmp_path: Path) -> None:

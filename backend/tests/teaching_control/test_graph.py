@@ -128,9 +128,34 @@ def test_b_second_failure_with_valid_observation_selects_l1():
     assert len(llm.calls) == 2
 
 
+def test_practice_failure_threshold_keeps_student_working_at_l1():
+    graph, config, _, llm, store = make_runtime()
+    state = initial_state(
+        make_event(
+            operation_id="practice-threshold",
+            observation="我已核对资料加载和关键词字段，检索仍然返回空结果。",
+        )
+    )
+    state["student_failure_count"] = 2
+
+    result = graph.invoke(state, config=config)
+
+    assert "__interrupt__" not in result
+    assert result["student_failure_count"] == 3
+    assert result["help_level"] == "L1"
+    assert result["guidance"]["level"] == "L1"
+    assert result["flow_status"] == "WAITING_FOR_STUDENT"
+    assert store.intervention_store.calls == []
+    assert len(llm.calls) == 1
+
+
 def test_c_failure_threshold_creates_recoverable_teacher_interrupt():
     graph, config, _, _, store = make_runtime()
     state = initial_state(make_event(operation_id="c"))
+    state["teacher_policy"] = {
+        **state["teacher_policy"],
+        "auto_teacher_intervention_enabled": True,
+    }
     state["student_failure_count"] = 2
 
     interrupted = graph.invoke(state, config=config)
@@ -147,6 +172,10 @@ def test_c_failure_threshold_creates_recoverable_teacher_interrupt():
 def test_d_teacher_resume_revalidates_permission_and_state_version():
     graph, config, _, _, store = make_runtime()
     state = initial_state(make_event(operation_id="d"))
+    state["teacher_policy"] = {
+        **state["teacher_policy"],
+        "auto_teacher_intervention_enabled": True,
+    }
     state["student_failure_count"] = 2
     graph.invoke(state, config=config)
     checkpoint_state = graph.get_state(config).values
@@ -172,6 +201,10 @@ def test_d_teacher_resume_revalidates_permission_and_state_version():
 def test_teacher_resume_with_l2_authorization_generates_l2_guidance():
     graph, config, _, llm, _ = make_runtime()
     state = initial_state(make_event(operation_id="d-l2", observation="已记录三次失败现象"))
+    state["teacher_policy"] = {
+        **state["teacher_policy"],
+        "auto_teacher_intervention_enabled": True,
+    }
     state["student_failure_count"] = 2
     graph.invoke(state, config=config)
     checkpoint_state = graph.get_state(config).values
@@ -197,6 +230,10 @@ def test_teacher_resume_with_l2_authorization_generates_l2_guidance():
 def test_d_unauthorized_teacher_resume_is_rejected():
     graph, config, _, _, store = make_runtime()
     state = initial_state(make_event(operation_id="d-unauthorized"))
+    state["teacher_policy"] = {
+        **state["teacher_policy"],
+        "auto_teacher_intervention_enabled": True,
+    }
     state["student_failure_count"] = 2
     graph.invoke(state, config=config)
     checkpoint_state = graph.get_state(config).values
@@ -291,7 +328,11 @@ def test_h_replayed_operation_id_does_not_repeat_side_effect():
 
 def test_i_stale_state_version_resume_is_rejected():
     graph, config, _, _, _ = make_runtime()
-    policy = {**DEFAULT_POLICY, "failure_threshold": 1}
+    policy = {
+        **DEFAULT_POLICY,
+        "failure_threshold": 1,
+        "auto_teacher_intervention_enabled": True,
+    }
     graph.invoke(
         initial_state(make_event(operation_id="i"), teacher_policy=policy),
         config=config,
@@ -341,6 +382,108 @@ def test_j_stage_advances_only_after_passing_assessment():
     assert len(store.calls) == 3
 
 
+def _tool_failure(tool_name: str) -> ToolExecutionResult:
+    return ToolExecutionResult(
+        operation_id=f"result-{tool_name}",
+        status="student_failure",
+        output_ref=f"result://{tool_name}",
+        summary=f"{tool_name} returned a non-zero exit code.",
+    )
+
+
+def test_k_advisory_self_run_does_not_count_as_learning_failure():
+    graph, config, executor, llm, _ = make_runtime()
+    executor.results_by_tool["run_student_program"] = _tool_failure("run_student_program")
+
+    result = graph.invoke(
+        initial_state(
+            make_event(
+                operation_id="k1",
+                event_type="run_tool",
+                requested_tool="run_student_program",
+            )
+        ),
+        config=config,
+    )
+
+    assert result["last_tool_status"] == "student_failure"
+    assert result["student_failure_count"] == 0
+    assert result["help_level"] == "NONE"
+    assert llm.calls == []
+    assert result["flow_status"] == "WAITING_FOR_STUDENT"
+
+
+def test_l_graded_check_failure_still_counts():
+    graph, config, executor, _, _ = make_runtime()
+    executor.results_by_tool["run_faq_tests"] = _tool_failure("run_faq_tests")
+
+    result = graph.invoke(
+        initial_state(
+            make_event(operation_id="l1", event_type="run_tool", requested_tool="run_faq_tests")
+        ),
+        config=config,
+    )
+
+    assert result["last_tool_status"] == "student_failure"
+    assert result["student_failure_count"] == 1
+
+
+def test_l2_composite_subcheck_does_not_double_count_a_student_attempt():
+    graph, config, executor, _, _ = make_runtime()
+    executor.results_by_tool["validate_answer_citations"] = _tool_failure(
+        "validate_answer_citations"
+    )
+    policy = {
+        **DEFAULT_POLICY,
+        "allowed_tools": [
+            *DEFAULT_POLICY["allowed_tools"],
+            "validate_answer",
+            "validate_answer_citations",
+        ],
+        "tool_capabilities": {
+            **DEFAULT_POLICY["tool_capabilities"],
+            "validate_answer": "EVALUATION",
+            "validate_answer_citations": "EVALUATION",
+        },
+        "failure_counting_tools": ["run_faq_tests", "validate_answer"],
+    }
+
+    result = graph.invoke(
+        initial_state(
+            make_event(
+                operation_id="l2-citation",
+                event_type="run_tool",
+                requested_tool="validate_answer_citations",
+            ),
+            teacher_policy=policy,
+        ),
+        config=config,
+    )
+
+    assert result["last_tool_status"] == "student_failure"
+    assert result["student_failure_count"] == 0
+
+
+def test_m_legacy_policy_without_counting_key_still_counts_graded_failures():
+    graph, config, executor, _, _ = make_runtime()
+    executor.results_by_tool["run_faq_tests"] = _tool_failure("run_faq_tests")
+    legacy_policy = {
+        key: value
+        for key, value in DEFAULT_POLICY.items()
+        if key != "failure_counting_capabilities"
+    }
+
+    result = graph.invoke(
+        initial_state(
+            make_event(operation_id="m1", event_type="run_tool", requested_tool="run_faq_tests"),
+            teacher_policy=legacy_policy,
+        ),
+        config=config,
+    )
+
+    assert result["student_failure_count"] == 1
+
+
 def test_client_stage_requirements_flag_is_ignored():
     graph, config, _, _, _ = make_runtime()
     forged = make_event(
@@ -372,11 +515,32 @@ def test_assessment_rejects_modification_capability():
     assert executor.calls == []
 
 
-def test_l2_defaults_to_persisted_teacher_intervention():
+def test_practice_l2_is_capped_at_l1_without_teacher_intervention():
     graph, config, _, llm, store = make_runtime()
     policy = {**DEFAULT_POLICY, "failure_threshold": 5, "allow_auto_l2": False}
     state = initial_state(
         make_event(operation_id="l2", observation="我已经定位到引用拼接处并完成两次最小验证。"),
+        teacher_policy=policy,
+    )
+    state["student_failure_count"] = 2
+    result = graph.invoke(state, config=config)
+    assert "__interrupt__" not in result
+    assert result["help_level"] == "L1"
+    assert result["guidance"]["level"] == "L1"
+    assert store.intervention_store.calls == []
+    assert len(llm.calls) == 1
+
+
+def test_explicit_auto_intervention_policy_keeps_l2_teacher_gate():
+    graph, config, _, llm, store = make_runtime()
+    policy = {
+        **DEFAULT_POLICY,
+        "failure_threshold": 5,
+        "allow_auto_l2": False,
+        "auto_teacher_intervention_enabled": True,
+    }
+    state = initial_state(
+        make_event(operation_id="l2-gated", observation="我已经定位到引用拼接处并完成两次最小验证。"),
         teacher_policy=policy,
     )
     state["student_failure_count"] = 2

@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -56,6 +57,68 @@ class CourseMembership(Base):
     course_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.courses.id"), index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.users.id"), index=True)
     role: Mapped[str] = mapped_column(String(24), nullable=False)
+
+
+class AccountCredential(Base):
+    __tablename__ = "account_credentials"
+    __table_args__ = ({"schema": BUSINESS_SCHEMA},)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.users.id"), unique=True, nullable=False)
+    account: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
+    password_salt: Mapped[str] = mapped_column(String(32), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ClassGroup(Base):
+    __tablename__ = "class_groups"
+    __table_args__ = (UniqueConstraint("teacher_id", "name"), {"schema": BUSINESS_SCHEMA})
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    teacher_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.users.id"), index=True, nullable=False)
+    course_id: Mapped[str | None] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.courses.id"), index=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ClassEnrollment(Base):
+    __tablename__ = "class_enrollments"
+    __table_args__ = (UniqueConstraint("class_id", "student_id"), {"schema": BUSINESS_SCHEMA})
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    class_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.class_groups.id"), index=True, nullable=False)
+    student_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.users.id"), index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class CourseDesign(Base):
+    __tablename__ = "course_designs"
+    __table_args__ = ({"schema": BUSINESS_SCHEMA},)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.courses.id"), index=True)
+    uploaded_by: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.users.id"))
+    file_name: Mapped[str] = mapped_column(String(240), nullable=False)
+    file_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    file_content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    extracted_text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class QuestionDraft(Base):
+    __tablename__ = "question_drafts"
+    __table_args__ = ({"schema": BUSINESS_SCHEMA},)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    course_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.courses.id"), index=True)
+    source_design_id: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.course_designs.id"))
+    created_by: Mapped[str] = mapped_column(ForeignKey(f"{BUSINESS_SCHEMA}.users.id"))
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    starter_code: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sample_input: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sample_output: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    answer_outline: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="draft")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class Task(Base):

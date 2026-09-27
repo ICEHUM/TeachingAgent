@@ -12,7 +12,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import httpx
 from openhands.sdk.workspace import RemoteWorkspace
@@ -24,12 +24,37 @@ INTERNAL_NETWORK = "teachingagent-stage03-internal"
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 
 
-def docker_command(*args, timeout=60, env=None, check=True):
+def docker_executable() -> Path:
+    if os.name != "nt":
+        found = shutil.which("docker")
+        if not found:
+            raise RuntimeError("Docker CLI is not installed on the Linux host")
+        return Path(found)
     executable = Path(os.environ["LOCALAPPDATA"]) / "Programs/DockerDesktop/resources/bin/docker.exe"
     if not executable.exists():
         executable = Path(os.environ["ProgramFiles"]) / "Docker/Docker/resources/bin/docker.exe"
+    return executable
+
+
+def _docker_cli_argv(executable: Path, platform: str, linux_socket: str) -> list[str]:
+    if platform == "nt":
+        return [str(executable), "--host", "npipe:////./pipe/dockerDesktopLinuxEngine"]
+    socket = PurePosixPath(linux_socket)
+    if not socket.is_absolute() or ".." in socket.parts or any(char in linux_socket for char in "\r\n\0"):
+        raise ValueError("Docker host must be an absolute local Unix socket")
+    return [str(executable), "--host", "unix://" + str(socket)]
+
+
+def docker_cli_argv() -> list[str]:
+    return _docker_cli_argv(
+        docker_executable(), os.name,
+        os.environ.get("TEACHING_DOCKER_UNIX_SOCKET", "/var/run/docker.sock"),
+    )
+
+
+def docker_command(*args, timeout=60, env=None, check=True):
     result = subprocess.run(
-        [str(executable), "--host", "npipe:////./pipe/dockerDesktopLinuxEngine", *args],
+        [*docker_cli_argv(), *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -172,9 +197,11 @@ def container_security_facts(container_id: str) -> dict[str, object]:
         for item in inspected.get("Mounts", [])
     ]
     return {
+        "image_id": inspected.get("Image"),
         "network_mode": host.get("NetworkMode"),
         "memory_bytes": host.get("Memory"),
         "memory_swap_bytes": host.get("MemorySwap"),
+        "read_only_root": bool(host.get("ReadonlyRootfs")),
         "nano_cpus": host.get("NanoCpus"),
         "pids_limit": host.get("PidsLimit"),
         "cap_drop": host.get("CapDrop") or [],
@@ -183,6 +210,7 @@ def container_security_facts(container_id: str) -> dict[str, object]:
         "container_user": config.get("User"),
         "mounts": mounts,
         "published_ports": sorted((config.get("ExposedPorts") or {}).keys()),
+        "port_bindings": host.get("PortBindings") or {},
         "docker_socket_mounted": any(
             item["destination"] == "/var/run/docker.sock" for item in mounts
         ),

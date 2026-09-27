@@ -12,10 +12,15 @@ from langgraph.types import Command
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.agent.tools import TOOL_CATALOG, OpenHandsExecutor, validate_execution_result
+from app.agent.tools import (
+    PYTHON_CATALOGS,
+    TOOL_CATALOG,
+    validate_execution_result,
+)
 from app.teaching_control.graph import TeachingGraphDependencies, build_teaching_graph
 from app.teaching_control.protocols import (
     InterventionCreation,
+    OpenHandsExecutorProtocol,
     PersistResult,
     RequirementEvaluation,
     ResourcePolicy,
@@ -31,6 +36,7 @@ from app.teaching_control.state import (
 
 from .checkpoint import checkpoint_saver
 from .faq import DEFAULT_TASK_POLICY, SUPPORTED_FAQ_TASK_KEYS
+from .guidance_context import ContextualTeachingLLM
 from .models import (
     Attempt,
     CourseMembership,
@@ -41,6 +47,8 @@ from .models import (
     TaskStage,
     TaskVersion,
 )
+from .python_basics import POLICY as PYB01_POLICY
+from .python_basics import task_pack_for
 from .service import (
     INTERVENTION_CHECKPOINT_FAILED,
     INTERVENTION_CREATING,
@@ -227,10 +235,19 @@ class DatabaseInterventionStore:
 
 
 REQUIREMENT_TOOL = {
+    "addition_public_tests": "run_python_public_tests",
+    "addition_hidden_tests": "run_python_hidden_tests",
+    "passing_public_tests": "run_python_public_tests",
+    "passing_hidden_tests": "run_python_hidden_tests",
+    "traversal_public_tests": "run_python_public_tests",
+    "traversal_hidden_tests": "run_python_hidden_tests",
+    "identify_citation_rule": "inspect_task_brief",
+    "boundary_transfer": "validate_transfer",
+    "delivery_static_check": "inspect_delivery",
     "source_manifest": "inspect_workspace",
     "retrieval_public_tests": "run_faq_tests",
-    "answer_public_tests": "run_faq_tests",
-    "citation_static_check": "validate_citations",
+    "answer_public_tests": "validate_answer",
+    "citation_static_check": "validate_answer_citations",
     "unknown_question_test": "run_faq_tests",
 }
 
@@ -298,7 +315,7 @@ class DatabaseToolResultRecorder:
                     snapshot_id=request.snapshot_id,
                     operation_id=request.operation_id,
                     status=status,
-                    evaluator=f"openhands:{request.tool_name}:v1",
+                    evaluator=f"{result.executor_backend or 'openhands'}:{request.tool_name}:v1",
                     evidence_refs=list(evidence_refs),
                     version=definition.version,
                 )
@@ -338,7 +355,7 @@ class PersistentTeachingRuntime:
         *,
         session_factory: async_sessionmaker[AsyncSession],
         checkpoint_conninfo: str,
-        executor: OpenHandsExecutor,
+        executor: OpenHandsExecutorProtocol,
         llm: Any,
         service: BusinessService | None = None,
         tool_timeouts: dict[str, int] | None = None,
@@ -363,7 +380,9 @@ class PersistentTeachingRuntime:
                 raise BusinessRuleError("attempt_not_found")
             version = await session.get(TaskVersion, attempt.task_version_id)
             task = await session.get(Task, version.task_id) if version else None
-            if version is None or task is None or task.task_key not in SUPPORTED_FAQ_TASK_KEYS:
+            pack = task_pack_for(f"{task.task_key}-{version.version}") if version and task else None
+            if (version is None or task is None
+                    or (task.task_key not in SUPPORTED_FAQ_TASK_KEYS and pack is None)):
                 raise BusinessRuleError("unsupported_teaching_task")
             stages = list(
                 (
@@ -388,15 +407,33 @@ class PersistentTeachingRuntime:
                 ).all()
             )
             stored = dict(version.policy or {})
-            policy = dict(DEFAULT_TASK_POLICY)
-            policy.update({key: value for key, value in stored.items() if key not in {
-                "allowed_tools", "tool_capabilities", "assessment_allowed_capabilities"
-            }})
-            policy["allowed_tools"] = list(DEFAULT_TASK_POLICY["allowed_tools"])
-            policy["tool_capabilities"] = dict(DEFAULT_TASK_POLICY["tool_capabilities"])
-            policy["assessment_allowed_capabilities"] = list(
-                DEFAULT_TASK_POLICY["assessment_allowed_capabilities"]
+            trusted_policy = (
+                {**PYB01_POLICY, "stage_objectives": {"write_program": pack.objective}}
+                if pack is not None else DEFAULT_TASK_POLICY
             )
+            policy = dict(trusted_policy)
+            policy.update({key: value for key, value in stored.items() if key not in {
+                "allowed_tools",
+                "tool_capabilities",
+                "assessment_allowed_tools",
+                "assessment_allowed_capabilities",
+                "failure_counting_capabilities",
+                "failure_counting_tools",
+                "self_service_tools",
+            }})
+            policy["allowed_tools"] = list(trusted_policy["allowed_tools"])
+            policy["tool_capabilities"] = dict(trusted_policy["tool_capabilities"])
+            policy["assessment_allowed_tools"] = list(trusted_policy["assessment_allowed_tools"])
+            policy["assessment_allowed_capabilities"] = list(
+                trusted_policy["assessment_allowed_capabilities"]
+            )
+            policy["failure_counting_capabilities"] = list(
+                trusted_policy["failure_counting_capabilities"]
+            )
+            policy["failure_counting_tools"] = list(
+                trusted_policy["failure_counting_tools"]
+            )
+            policy["self_service_tools"] = list(trusted_policy["self_service_tools"])
             policy["ai_guidance_enabled"] = not attempt.ai_guidance_paused
             state = new_teaching_state(
                 attempt_id=attempt.id,
@@ -420,7 +457,8 @@ class PersistentTeachingRuntime:
         bridge = _LoopBridge(loop)
         return TeachingGraphDependencies(
             executor=self.executor,
-            llm=self.llm,
+            llm=ContextualTeachingLLM(delegate=self.llm, factory=self.session_factory,
+                                      manager=self.executor.manager, bridge=bridge),
             event_store=DatabaseTeachingEventStore(
                 self.session_factory, self.service, bridge
             ),
@@ -436,9 +474,49 @@ class PersistentTeachingRuntime:
             resource_policy=ResourcePolicy(),
             tool_timeouts={
                 **{name: item.timeout_seconds for name, item in TOOL_CATALOG.items()},
+                **{name: item.timeout_seconds for catalog in PYTHON_CATALOGS.values()
+                   for name, item in catalog.items()},
                 **self.tool_timeouts,
             },
         )
+
+    @staticmethod
+    def _checkpoint_refresh_input(
+        current: TeachingState, *, event: TeachingEvent
+    ) -> dict[str, object]:
+        """Refresh server-owned facts when continuing an existing checkpoint.
+
+        Checkpoints preserve workflow state, but permissions, policy, stage position,
+        and concurrency values belong to the business database. Refreshing them here
+        also lets existing attempts receive newly approved evaluation tools without
+        recreating their checkpoints.
+        """
+        return {
+            "incoming_event": dict(event),
+            "authorized_teacher_ids": list(current["authorized_teacher_ids"]),
+            "state_version": current["state_version"],
+            "policy_version": current["policy_version"],
+            "current_stage": current["current_stage"],
+            "stage_index": current["stage_index"],
+            "mode": current["mode"],
+            "teacher_policy": dict(current["teacher_policy"]),
+            "student_failure_count": current["student_failure_count"],
+            "infrastructure_failure_count": current["infrastructure_failure_count"],
+        }
+
+    @staticmethod
+    def _restore_tool_outcome(
+        guidance_result: dict[str, Any], *, tool_result: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Keep the completed tool outcome in the API response after auto-guidance.
+
+        The follow-up guidance event intentionally clears per-event tool fields in the
+        checkpoint. The caller still needs the immediately preceding tool status to
+        render student failure separately from infrastructure failure.
+        """
+        for key in ("last_tool_status", "last_tool_result_ref"):
+            guidance_result[key] = tool_result.get(key)
+        return guidance_result
 
     async def _mark_interrupt(self, result: dict[str, Any], *, succeeded: bool) -> None:
         pending = result.get("pending_intervention")
@@ -463,11 +541,12 @@ class PersistentTeachingRuntime:
             async with checkpoint_saver(self.checkpoint_conninfo) as saver:
                 graph = build_teaching_graph(dependencies=dependencies, checkpointer=saver)
                 checkpoint = await saver.aget(config)
+                current = await self._initial_state(attempt_id=attempt_id, event=event)
                 graph_input: dict[str, object]
                 if checkpoint is None:
-                    graph_input = dict(await self._initial_state(attempt_id=attempt_id, event=event))
+                    graph_input = dict(current)
                 else:
-                    graph_input = {"incoming_event": dict(event)}
+                    graph_input = self._checkpoint_refresh_input(current, event=event)
                 result = await graph.ainvoke(graph_input, config=config)
                 if "__interrupt__" in result:
                     await self._mark_interrupt(result, succeeded=True)
@@ -476,6 +555,7 @@ class PersistentTeachingRuntime:
                     "student_failure",
                     "infrastructure_failure",
                 }:
+                    tool_result = dict(result)
                     followup: TeachingEvent = {
                         "event_id": str(uuid4()),
                         "event_type": "request_guidance",
@@ -496,6 +576,9 @@ class PersistentTeachingRuntime:
                     }
                     result = await graph.ainvoke(
                         {"incoming_event": followup}, config=config
+                    )
+                    result = self._restore_tool_outcome(
+                        result, tool_result=tool_result
                     )
                     if "__interrupt__" in result:
                         await self._mark_interrupt(result, succeeded=True)

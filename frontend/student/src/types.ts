@@ -1,5 +1,6 @@
 export type Requirement = {
   id: string; key: string; name: string; kind: string; status: string;
+  student_goal?: string; success_criteria?: string;
   snapshot_id: string | null; snapshot_label: string | null; operation_id: string | null;
   evaluator: string; min_length?: number | null; evidence_refs: string[]; evaluated_at: string | null; has_old_result: boolean;
 };
@@ -22,10 +23,15 @@ export type Workbench = {
   latest_snapshot: { id: string; sequence: number; label: string; created_at: string } | null;
   files: Array<{ path: string; name: string; size: number }>;
   guidance: Guidance | null;
+  guidance_generated_at?: string | null;
+  guidance_snapshot?: { id: string; label: string } | null;
   student_observation: string;
+  help_requested?: boolean;
+  teacher_feedback?: { message: string; time: string; source?: "teacher" | "system" } | null;
   intervention: { id: string; status: string; reason: string; created_at: string } | null;
   timeline: Array<{ time: string; label: string; state_version: number }>;
   agent_trace: Array<{ kind: string; label: string; detail: string }>;
+  self_service_tools: SelfServiceTool[];
   latest_submission?: {
     id: string; sequence: number; snapshot_id: string; snapshot_label: string | null;
     created_at: string; review_status: string;
@@ -60,8 +66,37 @@ export type FilePayload = { path: string; content: string; hash: string; size: n
 export type Evidence = {
   snapshot: string; operation: string; tool: string; requirement: string; status: string;
   reason_code: string; observed_at: string; stdout_summary: string; stdout_truncated: boolean;
-  checks?: Array<{ code: string; passed: boolean; detail?: string }>;
+  checks?: Array<{ code: string; passed: boolean; detail?: string; diagnosis_code?: string }>;
+  skill_evidence?: Array<{ skill_id: string; status: string; case_code: string }>;
   error_summary?: string;
   location?: { file: string; line: number } | null;
   artifacts: Array<{ kind: string; ref: string; available: boolean }>;
+};
+
+export type SelfServiceTool = { name: string; label: string };
+
+export type ConsoleRun = {
+  tool: string; label: string;
+  status: "succeeded" | "student_failure" | "infrastructure_failure" | string;
+  code: string; exit_code: number | null;
+  stdout: string; stdout_truncated: boolean;
+  stderr: string; stderr_truncated: boolean;
+  location?: { file: string; line: number } | null;
+  snapshot: string; snapshot_id: string | null; operation: string; recorded: boolean;
+  sample_input?: string | null;
+  trace?: Array<{ file: string; line: number; locals: Record<string, string> }>;
+  trace_truncated?: boolean;
+  state_version?: number;
+};
+
+export type TerminalSession = {
+  session_id: string;
+  snapshot_id: string;
+  snapshot: string;
+  status: "running" | "stopping" | "completed" | "failed" | "stopped" | "timed_out";
+  exit_code: number | null;
+  events: Array<{ kind: "stdout" | "stderr" | "input" | "system"; text: string }>;
+  output_truncated: boolean;
+  input_bytes: number;
+  stdin_closed: boolean;
 };

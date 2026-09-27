@@ -26,6 +26,7 @@ from .protocols import (
     ToolResultRecorderProtocol,
 )
 from .state import (
+    DEFAULT_POLICY,
     AssessmentOutcome,
     GuidanceKind,
     HelpLevel,
@@ -145,6 +146,7 @@ def validate_context(state: TeachingState) -> dict[str, object]:
 
 def load_policy(state: TeachingState) -> dict[str, object]:
     configured = dict(state["teacher_policy"])
+    configured.setdefault("auto_teacher_intervention_enabled", False)
     threshold = configured.get("failure_threshold")
     if not isinstance(threshold, int) or threshold < 1:
         raise InvalidContextError("failure_threshold must be a positive integer.")
@@ -158,6 +160,7 @@ def load_policy(state: TeachingState) -> dict[str, object]:
             "allow_answer_guidance": False,
             "allow_code_patch": False,
             "allow_auto_l2": False,
+            "auto_teacher_intervention_enabled": True,
         }
     return {"effective_policy": effective}
 
@@ -306,6 +309,7 @@ def decide_action(state: TeachingState) -> dict[str, object]:
         }
     if (
         state["latest_check_status"] == "student_failure"
+        and policy["auto_teacher_intervention_enabled"]
         and state["student_failure_count"] >= policy["failure_threshold"]
     ):
         operation_id = event["operation_id"]
@@ -353,22 +357,25 @@ def decide_action(state: TeachingState) -> dict[str, object]:
             }
         level = _select_help_level(state)
         if level == "L2" and not (policy["allow_auto_l2"] or state["l2_authorized"]):
-            operation_id = event["operation_id"]
-            return {
-                "decision": {
-                    "kind": "teacher_interrupt",
-                    "reason": "L2 requires explicit task policy or teacher authorization.",
-                    "guidance_kind": None,
-                    "tool_name": None,
-                },
-                "pending_intervention": {
-                    "intervention_id": f"pending:{operation_id}",
-                    "reason": "l2_authorization_required",
-                    "requested_state_version": state["state_version"],
-                    "persisted": False,
-                },
-                "flow_status": "WAITING_FOR_TEACHER",
-            }
+            if not policy["auto_teacher_intervention_enabled"]:
+                level = "L1"
+            else:
+                operation_id = event["operation_id"]
+                return {
+                    "decision": {
+                        "kind": "teacher_interrupt",
+                        "reason": "L2 requires explicit task policy or teacher authorization.",
+                        "guidance_kind": None,
+                        "tool_name": None,
+                    },
+                    "pending_intervention": {
+                        "intervention_id": f"pending:{operation_id}",
+                        "reason": "l2_authorization_required",
+                        "requested_state_version": state["state_version"],
+                        "persisted": False,
+                    },
+                    "flow_status": "WAITING_FOR_TEACHER",
+                }
         return {
             "help_level": level,
             "decision": {
@@ -444,6 +451,8 @@ def _execute_tool(
     snapshot_id = state["latest_snapshot_id"]
     if not snapshot_id:
         raise InvalidContextError("Tool execution requires a snapshot_id reference.")
+    tool_name = cast(str, state["decision"]["tool_name"])
+    capability = state["effective_policy"]["tool_capabilities"][tool_name]
     result = dependencies.executor.execute(
         ToolExecutionRequest(
             operation_id=operation_id,
@@ -451,14 +460,11 @@ def _execute_tool(
             task_version=state["task_version"],
             stage=state["current_stage"],
             snapshot_id=snapshot_id,
-            tool_name=cast(str, state["decision"]["tool_name"]),
-            tool_capability=state["effective_policy"]["tool_capabilities"][
-                cast(str, state["decision"]["tool_name"])
-            ],
-            timeout_seconds=dependencies.tool_timeouts.get(
-                cast(str, state["decision"]["tool_name"]), 30
-            ),
+            tool_name=tool_name,
+            tool_capability=capability,
+            timeout_seconds=dependencies.tool_timeouts.get(tool_name, 30),
             resource_policy=dependencies.resource_policy,
+            stdin_text=event.get("stdin_text") if tool_name in {"run_python_sample", "run_python_trace"} else None,
         )
     )
     if result.operation_id != operation_id:
@@ -472,14 +478,11 @@ def _execute_tool(
                 task_version=state["task_version"],
                 stage=state["current_stage"],
                 snapshot_id=snapshot_id,
-                tool_name=cast(str, state["decision"]["tool_name"]),
-                tool_capability=state["effective_policy"]["tool_capabilities"][
-                    cast(str, state["decision"]["tool_name"])
-                ],
-                timeout_seconds=dependencies.tool_timeouts.get(
-                    cast(str, state["decision"]["tool_name"]), 30
-                ),
+                tool_name=tool_name,
+                tool_capability=capability,
+                timeout_seconds=dependencies.tool_timeouts.get(tool_name, 30),
                 resource_policy=dependencies.resource_policy,
+                stdin_text=event.get("stdin_text") if tool_name in {"run_python_sample", "run_python_trace"} else None,
             ),
             result,
         )
@@ -499,10 +502,14 @@ def _execute_tool(
             infrastructure_failure_count=state["infrastructure_failure_count"] + 1,
         )
     elif result.status == "student_failure":
-        update.update(
-            latest_check_status="student_failure",
-            student_failure_count=state["student_failure_count"] + 1,
+        update["latest_check_status"] = "student_failure"
+        counted = state["effective_policy"].get(
+            "failure_counting_capabilities", DEFAULT_POLICY["failure_counting_capabilities"]
         )
+        counted_tools = state["effective_policy"].get("failure_counting_tools")
+        tool_counts = counted_tools is None or tool_name in set(counted_tools)
+        if capability in set(counted) and tool_counts:
+            update["student_failure_count"] = state["student_failure_count"] + 1
     else:
         update["latest_check_status"] = "passed"
     return update
@@ -530,6 +537,8 @@ def _generate_guidance(
             kind=kind,
             evidence_refs=tuple(state["evidence_refs"]),
             evidence_summary=state["evidence_summary"],
+            snapshot_id=state["latest_snapshot_id"],
+            student_observation=state["student_observation"] or "",
         )
     )
     if draft.level != state["help_level"] or draft.kind != kind:
@@ -629,6 +638,7 @@ def _persist_event(
             "event_id": event["event_id"],
             "event_type": event["event_type"],
             "decision": state["decision"]["kind"],
+            "tool_name": state["decision"].get("tool_name"),
             "stage": state["current_stage"],
             "snapshot_id": state["latest_snapshot_id"],
             "evidence_refs": list(state["evidence_refs"]),

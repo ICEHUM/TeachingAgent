@@ -16,3 +16,7 @@ workspaces/attempts/
 workspaces/evidence/
 workspaces/model-runs/
 .runtime/
+.workbuddy/
+.pytest_tmp*/
+backend/.pytest-registration-*/
+backend/.runtime/

@@ -25,7 +25,7 @@
     {
       "name": "LangGraph checkpoint",
       "status": "PASS",
-      "summary": "checkpoint 表可读；记录数 807"
+      "summary": "checkpoint 表可读；记录数 1782"
     },
     {
       "name": "OpenHands Agent Server / image",
@@ -60,7 +60,7 @@
     {
       "name": "磁盘空间",
       "status": "PASS",
-      "summary": "可用 362.6 GiB"
+      "summary": "可用 360.2 GiB"
     },
     {
       "name": "必要端口",

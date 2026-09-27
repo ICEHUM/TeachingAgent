@@ -55,6 +55,10 @@ def main() -> None:
         "DEMO_STUDENT_PASSWORD": login["student_password"],
         "DEMO_TEACHER_ACCOUNT": login["teacher_account"],
         "DEMO_TEACHER_PASSWORD": login["teacher_password"],
+        "DEMO_TEACHER2_ACCOUNT": login.get("teacher2_account", "demo_teacher2"),
+        "DEMO_TEACHER2_PASSWORD": login.get("teacher2_password", "123456"),
+        "DEMO_TEACHER3_ACCOUNT": login.get("teacher3_account", "demo_teacher3"),
+        "DEMO_TEACHER3_PASSWORD": login.get("teacher3_password", "123456"),
         "TEACHING_DATABASE_URL": (
             f"postgresql+psycopg://teaching_app:{quote_plus(info['teaching_app_password'])}"
             f"@{info['host']}:{info['port']}/{info['database']}"

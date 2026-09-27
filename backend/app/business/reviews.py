@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .faq import FAQ_RUBRIC
 from .models import (
     Attempt,
     FormalGrade,
@@ -16,6 +15,7 @@ from .models import (
     RequirementResult,
     Review,
     ReviewItem,
+    RubricDefinition,
     Snapshot,
     Submission,
     TaskStage,
@@ -40,9 +40,9 @@ REQUIREMENT_TITLES = {
 }
 
 
-def _ai_suggestion(*, auto_status: str, title: str) -> str:
+def _check_explanation(*, auto_status: str, title: str) -> str:
     if auto_status == "SATISFIED":
-        return f"「{title}」相关自动证据已满足。建议教师核对学生解释与证据是否一致后再确认，不能把建议分直接当作正式成绩。"
+        return f"「{title}」相关自动证据已满足。建议教师核对学生解释与证据是否一致后再确认，检查说明不代表正式成绩。"
     if auto_status == "NOT_SATISFIED":
         return f"「{title}」在当前提交 Snapshot 上尚未满足。请依据失败证据评分；未填项保持待评价。"
     if auto_status == "INFRASTRUCTURE_ERROR":
@@ -65,6 +65,27 @@ def _auto_status(results: list[RequirementResult]) -> str:
 class ReviewService:
     def __init__(self, business: BusinessService | None = None):
         self.business = business or BusinessService()
+
+    async def assistance_history(self, session: AsyncSession, *, attempt_id: str) -> list[dict]:
+        events = list((await session.scalars(
+            select(TeachingEvent)
+            .where(TeachingEvent.attempt_id == attempt_id)
+            .order_by(TeachingEvent.created_at)
+        )).all())
+        assistance = []
+        for event in events:
+            guidance = (event.payload or {}).get("guidance")
+            if not isinstance(guidance, dict) or guidance.get("success") is not True:
+                continue
+            assistance.append({
+                "time": event.created_at.isoformat(),
+                "level": guidance.get("level"),
+                "message": str(guidance.get("message") or "")[:800],
+                "next_step": str(guidance.get("next_step") or "")[:300],
+                "success": guidance.get("success"),
+                "fallback_reason": guidance.get("fallback_reason"),
+            })
+        return assistance
 
     async def latest_submission(self, session: AsyncSession, *, attempt_id: str) -> Submission | None:
         return await session.scalar(
@@ -122,24 +143,7 @@ class ReviewService:
             )
             or 0
         ) + 1
-        events = list((await session.scalars(
-            select(TeachingEvent)
-            .where(TeachingEvent.attempt_id == attempt.id)
-            .order_by(TeachingEvent.created_at)
-        )).all())
-        assistance = []
-        for event in events:
-            guidance = (event.payload or {}).get("guidance")
-            if not isinstance(guidance, dict):
-                continue
-            assistance.append({
-                "time": event.created_at.isoformat(),
-                "level": guidance.get("level"),
-                "message": str(guidance.get("message") or "")[:800],
-                "next_step": str(guidance.get("next_step") or "")[:300],
-                "success": guidance.get("success"),
-                "fallback_reason": guidance.get("fallback_reason"),
-            })
+        assistance = await self.assistance_history(session, attempt_id=attempt.id)
         submission = Submission(
             attempt_id=attempt.id,
             snapshot_id=snapshot.id,
@@ -187,11 +191,11 @@ class ReviewService:
             select(RequirementResult).where(
                 RequirementResult.attempt_id == attempt.id,
                 RequirementResult.snapshot_id == snapshot.id,
-            )
+            ).order_by(RequirementResult.evaluated_at, RequirementResult.id)
         )).all())
         results_by_req = {}
         for item in results:
-            results_by_req.setdefault(item.requirement_id, item)
+            results_by_req[item.requirement_id] = item
         review = await session.scalar(select(Review).where(Review.submission_id == submission.id))
         if review is None and teacher is not None:
             review = Review(submission_id=submission.id, teacher_id=teacher.id, status="draft")
@@ -228,7 +232,7 @@ class ReviewService:
                 else "环境异常，不计入学生能力。" if auto_status == "INFRASTRUCTURE_ERROR"
                 else "尚无绑定该提交 Snapshot 的自动证据。"
             )
-            ai_text = stored.ai_text if stored else _ai_suggestion(auto_status=auto_status, title=definition.title)
+            ai_text = stored.ai_text if stored else _check_explanation(auto_status=auto_status, title=definition.title)
             evidence_refs = stored.ai_evidence_refs if stored else [
                 item["operation_id"] for item in related if item["operation_id"]
             ]
@@ -302,6 +306,14 @@ class ReviewService:
             },
         }
 
+    async def rubric_limits(self, session: AsyncSession, review: Review) -> dict[str, int]:
+        submission = await session.get(Submission, review.submission_id)
+        attempt = await session.get(Attempt, submission.attempt_id)
+        definitions = list((await session.scalars(select(RubricDefinition).where(
+            RubricDefinition.task_version_id == attempt.task_version_id,
+        ))).all())
+        return {item.item_key: item.max_score for item in definitions}
+
     async def save_draft(
         self,
         session: AsyncSession,
@@ -317,8 +329,8 @@ class ReviewService:
             item.rubric_key: item
             for item in (await session.scalars(select(ReviewItem).where(ReviewItem.review_id == review.id))).all()
         }
-        allowed = {key for key, *_ in FAQ_RUBRIC}
-        max_scores = {key: max_score for key, _title, max_score, _reqs in FAQ_RUBRIC}
+        max_scores = await self.rubric_limits(session, review)
+        allowed = set(max_scores)
         for payload in items:
             key = str(payload.get("key") or "")
             if key not in allowed or key not in stored:
@@ -371,8 +383,8 @@ class ReviewService:
                 raise BusinessRuleError("published_review_missing_grade")
             return grade
         items = list((await session.scalars(select(ReviewItem).where(ReviewItem.review_id == review.id))).all())
-        max_scores = {key: max_score for key, _title, max_score, _reqs in FAQ_RUBRIC}
-        if len(items) != len(FAQ_RUBRIC):
+        max_scores = await self.rubric_limits(session, review)
+        if not max_scores or {item.rubric_key for item in items} != set(max_scores):
             raise BusinessRuleError("rubric_incomplete")
         total = 0
         max_total = 0

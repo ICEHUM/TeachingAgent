@@ -6,7 +6,7 @@
   "policy": {
     "tool_profile": "vocational_internship_policy_v1",
     "scenario_kind": "real_source_pilot",
-    "allow_auto_l2": false,
+    "allow_auto_l2": true,
     "allow_code_patch": false,
     "start_stage": "implement_retrieval",
     "civic_objectives": [
@@ -41,9 +41,9 @@
       {"key": "retrieval_public_tests", "name": "典型实习问题能够命中", "kind": "AUTO_TEST", "evaluator": "pytest_policy_retrieval_v1", "config": {"suite": "policy_retrieval"}},
       {"key": "retrieval_observation", "name": "提交基于证据的调试观察", "kind": "STUDENT_EXPLANATION", "evaluator": "student_explanation_v1", "config": {"min_length": 30}}
     ]},
-    {"key": "generate_cited_answer", "title": "生成可核验回答", "objective": "回答同时保留发布机关、来源链接和适用范围，让读者能够复核依据。", "aggregation": "ALL_REQUIRED", "requirements": [
-      {"key": "answer_public_tests", "name": "回答来自命中资料", "kind": "AUTO_TEST", "evaluator": "pytest_policy_answer_v1", "config": {"suite": "policy_answer"}},
-      {"key": "citation_static_check", "name": "回答包含权威来源与范围", "kind": "STATIC_CHECK", "evaluator": "policy_citation_v1", "config": {"require_urls": true, "require_scope": true}}
+    {"key": "generate_cited_answer", "title": "生成可核验回答", "objective": "新增 answer(question, sources)：正文取自命中资料，并返回来源标题、链接、发布机关和适用范围。", "aggregation": "ALL_REQUIRED", "requirements": [
+      {"key": "answer_public_tests", "name": "实现 answer()，回答正文来自命中资料", "kind": "AUTO_TEST", "evaluator": "pytest_policy_answer_v1", "config": {"suite": "policy_answer"}},
+      {"key": "citation_static_check", "name": "返回 citations 和适用范围 scope", "kind": "STATIC_CHECK", "evaluator": "policy_citation_v1", "config": {"require_urls": true, "require_scope": true}}
     ]},
     {"key": "validate_boundaries", "title": "验证责任边界", "objective": "面对资料外问题明确说明无法判断，不编造政策结论。", "aggregation": "ALL_REQUIRED", "requirements": [
       {"key": "unknown_question_test", "name": "资料外问题不伪造答案", "kind": "AUTO_TEST", "evaluator": "pytest_policy_boundary_v1", "config": {"suite": "policy_boundary"}},

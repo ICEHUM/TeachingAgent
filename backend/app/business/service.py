@@ -216,6 +216,7 @@ class BusinessService:
         evaluator: str,
         evidence_refs: list[str],
         version: int,
+        commit: bool = True,
     ) -> RequirementResult:
         definition = await session.get(RequirementDefinition, requirement_id)
         if definition is None or definition.version != version:
@@ -272,7 +273,10 @@ class BusinessService:
                 },
             )
         )
-        await session.commit()
+        if commit:
+            await session.commit()
+        else:
+            await session.flush()
         await session.refresh(result)
         return result
 

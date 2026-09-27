@@ -24,12 +24,12 @@ export function ReviewView({ userId, submissionId, onBack }: { userId: string; s
   const [activeFile, setActiveFile] = useState("");
   const [fileText, setFileText] = useState("");
 
-  async function load() {
+  async function load(preserveDraft = false) {
     setLoading(true);
     try {
       const value = await api<Evaluation>(`/api/product/submissions/${submissionId}`, userId);
       setData(value);
-      setDraft(toDraft(value.rubric));
+      if (!preserveDraft) setDraft(toDraft(value.rubric));
       const first = value.files?.[0]?.path || "";
       setActiveFile(first);
       setError("");
@@ -96,13 +96,15 @@ export function ReviewView({ userId, submissionId, onBack }: { userId: string; s
 
   async function confirmRequirement(key: string, status: "SATISFIED" | "NOT_SATISFIED") {
     if (!data?.submission.id) return;
+    const reason = window.prompt("请说明本项复核的依据或需要修改的内容：");
+    if (!reason || reason.trim().length < 4) { setError("请填写至少4个字的复核说明。"); return; }
     setBusy(key); setError("");
     try {
       await api(`/api/product/teacher/submissions/${data.submission.id}/requirement-reviews`, userId, {
         method: "POST",
-        body: JSON.stringify({ operation_id: newOperation("ui-teacher-review"), requirement_key: key, status, reason: "教师依据提交 Snapshot 完成复核。" }),
+        body: JSON.stringify({ operation_id: newOperation("ui-teacher-review"), requirement_key: key, status, reason: reason.trim() }),
       });
-      await load();
+      await load(true);
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : cause instanceof Error ? cause.message : "教师复核失败");
     } finally { setBusy(""); }
@@ -111,6 +113,7 @@ export function ReviewView({ userId, submissionId, onBack }: { userId: string; s
   if (loading) return <div className="eval-loading"><i /><span>正在读取提交 Snapshot 与量规…</span></div>;
   if (error && !data) return <div className="eval-empty"><strong>评价页暂时无法载入</strong><p>{error}</p><button className="refresh" onClick={onBack}>返回课堂台</button></div>;
   if (!data) return null;
+  const checks = [...new Map(data.rubric.flatMap((item) => item.requirements).map((item) => [item.key, item] as const)).values()];
 
   return <div className="eval-shell">
     <div className="eval-toolbar">
@@ -133,9 +136,9 @@ export function ReviewView({ userId, submissionId, onBack }: { userId: string; s
         </article>
         <article className="eval-block">
           <header><h2>检查</h2></header>
-          <div className="eval-checks">{data.rubric.flatMap((item) => item.requirements).map((req) => <div key={req.key} className={req.status.toLowerCase()}>
+          <div className="eval-checks">{checks.map((req) => <div key={req.key} className={req.status.toLowerCase()}>
             <b>{req.name}</b><small>{req.kind === "TEACHER_REVIEW" ? "教师复核" : req.evaluator || "尚未运行"}</small><span>{statusLabel(req.status)}</span>
-            {req.kind === "TEACHER_REVIEW" && req.status === "NOT_RUN" && !published && <button className="refresh" disabled={!!busy} onClick={() => void confirmRequirement(req.key, "SATISFIED")}>确认本项</button>}
+            {req.kind === "TEACHER_REVIEW" && !published && <><button className="refresh" disabled={!!busy} onClick={() => void confirmRequirement(req.key, "SATISFIED")}>确认通过</button><button className="refresh" disabled={!!busy} onClick={() => void confirmRequirement(req.key, "NOT_SATISFIED")}>需要修改</button></>}
           </div>)}</div>
         </article>
         <article className="eval-block">
@@ -151,7 +154,7 @@ export function ReviewView({ userId, submissionId, onBack }: { userId: string; s
       <aside className="eval-side">
         <section>
           <h2>量规</h2>
-          <p>自动检查、AI 建议和教师确认分开。未确认项保持待评价。</p>
+          <p>自动检查、检查说明和教师确认分开。未确认项保持待评价。</p>
         </section>
         {data.rubric.map((item) => {
           const current = draft.find((entry) => entry.key === item.key) || { key: item.key, score: "", reason: "", confirmed: false };
@@ -160,7 +163,7 @@ export function ReviewView({ userId, submissionId, onBack }: { userId: string; s
             <header><h3>{item.title}</h3><div className="rubric-meta"><span className={`review-state ${confirmed ? "confirmed" : "pending"}`}>{confirmed ? "已确认" : "待评价"}</span><small>{item.max_score} 分</small></div></header>
             <dl className="review-lanes">
               <div className="review-lane auto"><dt>自动检查</dt><dd>{item.auto.summary}</dd></div>
-              <div className="review-lane ai"><dt>AI 建议</dt><dd>{item.ai.text}</dd></div>
+              <div className="review-lane ai"><dt>检查说明</dt><dd>{item.ai.text}</dd></div>
             </dl>
             <div className="teacher-confirmation">
               <div className="teacher-confirmation-heading"><strong>教师确认</strong><span>正式成绩依据</span></div>

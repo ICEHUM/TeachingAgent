@@ -1,0 +1,72 @@
+/* Product pass: make the task, editor and next step readable at a glance. */
+@media (min-width: 1121px) {
+  .workspace-grid { grid-template-columns: 236px minmax(0, 1fr) 308px; }
+  .workspace-grid.task-collapsed { grid-template-columns: 56px minmax(0, 1fr) 308px; }
+}
+.task-head { padding: 20px 18px; }
+.task-head h1 { margin-top: 8px; font-size: 18px; line-height: 1.4; }
+.task-head p, .python-workspace .task-head p { color: var(--text-secondary); font-size: 14px; line-height: 1.7; }
+.task-switch { font-size: 13px; }
+.task-switch select { min-height: 40px; font-size: 13px; }
+.task-details > summary, .stage-current { font-size: 13px; line-height: 1.55; }
+.pane-section { padding: 17px 18px; }
+.pane-section h2, .coach-section h3 { font-size: 13px; }
+.stage-list li { min-height: 38px; font-size: 13px; }
+.compact-requirement { min-height: 39px; }
+.compact-requirement > span:nth-child(2) b { font-size: 13px; }
+.compact-requirement > span:nth-child(2) small { font-size: 12px; }
+.file-tree { background: var(--surface-subtle); }
+.file-tree .file-list button { min-height: 34px; font-size: 12px; }
+.file-tree-head .file-tools > div button { font-size: 13px; }
+.workspace-toolbar { padding-inline: 17px; }
+.workspace-toolbar strong { font-size: 13px; }
+.toolbar-actions .button { min-height: 36px; }
+.tabs { gap: 21px; }
+.tabs button { font-size: 13px; }
+.coach-head { min-height: 66px; padding-inline: 18px; }
+.coach-head h2 { font-size: 15px; }
+.coach-section { padding: 17px 18px; }
+.coach-section p, .guidance p, .teacher-help p { font-size: 14px; line-height: 1.72; }
+.coach-section textarea { font-size: 14px; line-height: 1.6; }
+.coach-section .button { min-height: 38px; }
+.observation-details > button { min-height: 46px; font-size: 13px; }
+.console-actions { padding-inline: 16px; }
+.terminal-screen { font-size: 14px; line-height: 1.62; }
+.terminal-live-footer { font-size: 12px; }
+.snapshot-chip { border-color: var(--border-strong); background: var(--accent-soft); color: var(--accent); }
+.submit-main .eval-block label { color: var(--text-primary); font-size: 14px; line-height: 1.6; }
+.submit-main .eval-block textarea {
+  min-height: 110px;
+  border-color: var(--border-strong);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.submit-main .eval-block textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.task-pane :is(button, summary, select):focus-visible,
+.coach-pane :is(button, summary, textarea):focus-visible,
+.code-pane :is(button, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (max-width: 1320px) and (min-width: 1121px) {
+  .workspace-grid { grid-template-columns: 224px minmax(0, 1fr) 294px; }
+  .workspace-grid.task-collapsed { grid-template-columns: 56px minmax(0, 1fr) 294px; }
+  .editor-zone { grid-template-columns: 148px minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .task-head { padding: 17px 16px; }
+  .task-head h1 { font-size: 17px; }
+  .task-head p, .python-workspace .task-head p { font-size: 13px; }
+  .code-pane, .code-pane.result-collapsed {
+    min-height: 0;
+    grid-template-rows: auto minmax(360px, auto) minmax(300px, auto);
+  }
+  .toolbar-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .toolbar-actions .debug-trigger, .toolbar-actions .button.primary { grid-column: auto; }
+  .editor-zone { order: 2; min-height: 360px; }
+  .result-panel { order: 3; min-height: 300px; }
+  .tabs { gap: 16px; }
+  .coach-section { padding: 16px; }
+}

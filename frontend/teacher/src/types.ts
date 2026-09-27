@@ -1,6 +1,6 @@
-export type ClassroomItem = { attempt_id: string; student: string; stage: string; stage_key: string; reason: string; failure_count: number; help_level: string; wait_seconds: number; intervention_id: string | null; intervention_status: string | null; category: string; ai_guidance_paused: boolean; submission_id?: string | null; review_status?: string | null };
-export type Classroom = { teacher: { id: string; display_name: string }; groups: { attention: ClassroomItem[]; progress: ClassroomItem[]; completed: ClassroomItem[] } };
-export type Requirement = { id: string; name: string; status: string; snapshot_label: string | null; evaluator: string; operation_id: string | null; evidence_refs: string[] };
+export type ClassroomItem = { attempt_id: string; created_at: string | null; student_id: string; student: string; course_id: string | null; course_code: string | null; task_key: string | null; task_title: string; public_check_status: string; stage: string; stage_key: string; reason: string; failure_count: number; help_level: string; wait_seconds: number; intervention_id: string | null; intervention_status: string | null; category: string; ai_guidance_paused: boolean; submission_id?: string | null; review_status?: string | null };
+export type Classroom = { teacher: { id: string; display_name: string }; courses: Array<{ id: string; code: string; name: string }>; groups: { attention: ClassroomItem[]; progress: ClassroomItem[]; completed: ClassroomItem[] } };
+export type Requirement = { id: string; key: string; kind: string; name: string; status: string; snapshot_label: string | null; evaluator: string; operation_id: string | null; evidence_refs: string[] };
 export type Detail = {
   identity: { user_id: string; display_name: string };
   course: { code: string; name: string }; task: { key: string; title: string; version: string };
@@ -9,6 +9,7 @@ export type Detail = {
   requirement_summary: { satisfied_count: number; required_count: number; satisfied: boolean };
   requirements: Requirement[];
   student_observation: string;
+  latest_snapshot?: { id: string; label: string } | null;
   guidance_history: Array<{ time: string; level?: string; message?: string; success?: boolean; fallback_reason?: string | null }>;
   timeline: Array<{ time: string; label: string; state_version: number }>;
   agent_trace: Array<{ kind: string; label: string; detail: string }>;
@@ -36,4 +37,4 @@ export type Evaluation = {
   files?: Array<{ path: string; name: string; size: number }>;
 };
 
-export type Evidence = { snapshot: string; operation: string; tool: string; requirement: string; status: string; reason_code: string; observed_at: string; stdout_summary: string; stdout_truncated: boolean; artifacts: Array<{ kind: string; ref: string; available: boolean }> };
+export type Evidence = { snapshot: string; operation: string; tool: string; requirement: string; status: string; reason_code: string; observed_at: string; stdout_summary: string; stdout_truncated: boolean; checks?: Array<{ code: string; passed: boolean; detail: string; diagnosis_code: string }>; skill_evidence?: Array<{ skill_id: string; status: string; case_code: string }>; error_summary?: string; location?: { file: string; line: number } | null; artifacts: Array<{ kind: string; ref: string; available: boolean }> };

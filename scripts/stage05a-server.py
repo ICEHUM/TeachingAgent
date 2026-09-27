@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import os
 import sys
@@ -14,13 +15,16 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args()
     os.environ.setdefault("TEACHING_ENV", "development")
     os.environ.setdefault("DEV_AUTH_ENABLED", "true")
     os.environ.setdefault("LANGGRAPH_STRICT_MSGPACK", "true")
     config = uvicorn.Config(
         "app.main:app",
         host="127.0.0.1",
-        port=8000,
+        port=args.port,
         reload=False,
         log_level="info",
         loop="none",

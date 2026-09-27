@@ -56,6 +56,7 @@ class ToolExecutionRequest:
     tool_capability: ToolCapability
     timeout_seconds: int
     resource_policy: ResourcePolicy
+    stdin_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +67,7 @@ class ToolExecutionResult:
     summary: str
     evidence: tuple[EvidenceRecord, ...] = field(default_factory=tuple)
     duplicate: bool = False
+    executor_backend: Literal["openhands", "docker_runner"] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +81,11 @@ class GuidanceRequest:
     kind: GuidanceKind
     evidence_refs: tuple[str, ...]
     evidence_summary: str
+    snapshot_id: str | None = None
+    student_observation: str = ""
+    learning_history: tuple[dict, ...] = ()
+    source_context: str = ""
+    execution_details: tuple[dict, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

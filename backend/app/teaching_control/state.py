@@ -1,4 +1,4 @@
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 TeachingMode = Literal["guided_practice", "teacher_demo", "assessment"]
 HelpLevel = Literal["NONE", "L0", "L1", "L2"]
@@ -52,10 +52,12 @@ class TeachingEvent(TypedDict, total=False):
     failure_origin: FailureOrigin
     requested_guidance_kind: GuidanceKind
     requested_tool: str
+    stdin_text: str | None
 
 
 class TeachingPolicy(TypedDict):
     failure_threshold: int
+    auto_teacher_intervention_enabled: bool
     max_help_level: HelpLevel
     require_observation_for_l1: bool
     allow_answer_guidance: bool
@@ -65,6 +67,12 @@ class TeachingPolicy(TypedDict):
     allowed_tools: list[str]
     tool_capabilities: dict[str, ToolCapability]
     assessment_allowed_capabilities: list[ToolCapability]
+    # Only these capabilities count toward the repeated-failure threshold. Advisory
+    # self-service runs must not move a learner toward teacher escalation.
+    failure_counting_capabilities: list[ToolCapability]
+    # When present, only these tools count as one learner attempt. This prevents a
+    # composite requirement check from charging one click as multiple failures.
+    failure_counting_tools: NotRequired[list[str]]
 
 
 class TeachingDecision(TypedDict):
@@ -171,6 +179,7 @@ class TeachingState(TypedDict):
 
 DEFAULT_POLICY: TeachingPolicy = {
     "failure_threshold": 3,
+    "auto_teacher_intervention_enabled": False,
     "max_help_level": "L2",
     "require_observation_for_l1": True,
     "allow_answer_guidance": True,
@@ -196,6 +205,13 @@ DEFAULT_POLICY: TeachingPolicy = {
         "run_public_checks": "EVALUATION",
     },
     "assessment_allowed_capabilities": ["DIAGNOSTIC", "EVALUATION"],
+    "failure_counting_capabilities": ["EVALUATION"],
+    "failure_counting_tools": [
+        "run_faq_tests",
+        "validate_retrieval",
+        "validate_citations",
+        "run_public_checks",
+    ],
 }
 
 

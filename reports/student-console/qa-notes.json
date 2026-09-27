@@ -1,0 +1,162 @@
+[
+  {
+    "check": "learner is unblocked before the console checks",
+    "ok": true,
+    "detail": "{\"id\": \"9d42e379-d10b-45f7-9827-1dad3b326a3d\", \"status\": \"RESOLVED\", \"reason\": \"failure_threshold_reached\", \"created_at\": \"2026-09-21T10:15:01.733029+00:00\"}"
+  },
+  {
+    "check": "workbench exposes the server-owned console tools",
+    "ok": true,
+    "detail": "run_student_program,inspect_runtime_error"
+  },
+  {
+    "check": "demo login reaches the workbench",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "toolbar shows the run-program action",
+    "ok": true,
+    "detail": "toolbar button"
+  },
+  {
+    "check": "console empty state explains what a run does",
+    "ok": true,
+    "detail": "还没有运行记录\n\n点击“运行我的程序”，在隔离工作区里执行你写完的代码，这里会原样显示它自己的输出和报错。\n\n程序没有输出时，通常是因为文件里只有函数定义；在末"
+  },
+  {
+    "check": "self run reaches a terminal state",
+    "ok": true,
+    "detail": "程序正常结束\n\n退出码为 0。下面是你这次运行的真实输出。\n\n运行我的程序\n退出码 0\n本次代码：Snapshot I\n程序输出（stdout）\nsources"
+  },
+  {
+    "check": "stdout shows the program's own output",
+    "ok": true,
+    "detail": "sources: 5\nhits: 5\n"
+  },
+  {
+    "check": "console records an operation reference",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "successful self run does not change failure counters",
+    "ok": true,
+    "detail": "7/0 -> 7/0"
+  },
+  {
+    "check": "successful self run advances state",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "broken program shows the real traceback",
+    "ok": true,
+    "detail": "NameError: name 'retrieve_answer' is not defined"
+  },
+  {
+    "check": "console offers a jump to the failing line",
+    "ok": true,
+    "detail": "跳到 faq_app.py 第 55 行"
+  },
+  {
+    "check": "jump switches to the failing file",
+    "ok": true,
+    "detail": "faq_app.py"
+  },
+  {
+    "check": "jump puts the cursor in the editor",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "jump reveals line 55",
+    "ok": true,
+    "detail": "gutter shows: ['34', '35', '36', '37', '38', '39']..['54', '55', '56']"
+  },
+  {
+    "check": "failing self run is not counted as a learning failure",
+    "ok": true,
+    "detail": "7 -> 7"
+  },
+  {
+    "check": "timeline distinguishes a self run from a graded check",
+    "ok": true,
+    "detail": "运行检查未通过 | 等待教师介入 | 学生自己运行程序（正常结束） | 学生自己运行程序（报错）"
+  },
+  {
+    "check": "run-program action is keyboard reachable",
+    "ok": true,
+    "detail": "提交 > 收起任务 > 运行我的程序"
+  },
+  {
+    "check": "keyboard activation starts the run",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "keyboard-started run reaches a terminal state",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "acceptance run still reports its own result",
+    "ok": true,
+    "detail": "!\n检查未通过\n\n已知问题没有检索到资料\n\n本次代码：版本 J\n✓\n资料已成功加载\n×\n已知问题能够命中\n✓\n未知问题不会伪造命中\n×\n回答保留权威来源\n×\n地方规则适用范围正确\n查看完整证据"
+  },
+  {
+    "check": "graded check keeps its own counting rule",
+    "ok": true,
+    "detail": "7 -> 8 (failed=True)"
+  },
+  {
+    "check": "resolved the intervention raised by the graded check",
+    "ok": true,
+    "detail": "1dc21e2a-898f-47e7-881b-667e13bb9306"
+  },
+  {
+    "check": "no page-level horizontal overflow at 1440x900",
+    "ok": true,
+    "detail": "{\"scrollWidth\": 1440, \"clientWidth\": 1440}"
+  },
+  {
+    "check": "console pane renders at 1440x900",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "no page-level horizontal overflow at 1366x768",
+    "ok": true,
+    "detail": "{\"scrollWidth\": 1366, \"clientWidth\": 1366}"
+  },
+  {
+    "check": "console pane renders at 1366x768",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "no page-level horizontal overflow at 1024x768",
+    "ok": true,
+    "detail": "{\"scrollWidth\": 1024, \"clientWidth\": 1024}"
+  },
+  {
+    "check": "console pane renders at 1024x768",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "no page-level horizontal overflow at 390x844",
+    "ok": true,
+    "detail": "{\"scrollWidth\": 390, \"clientWidth\": 390}"
+  },
+  {
+    "check": "console pane renders at 390x844",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "check": "demo attempt left without a pending intervention",
+    "ok": true,
+    "detail": "none pending"
+  }
+]

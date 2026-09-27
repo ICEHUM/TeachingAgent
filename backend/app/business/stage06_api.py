@@ -21,6 +21,7 @@ from app.agent.workspace import docker_command
 
 from .api import current_user, db_session
 from .models import Attempt, Course, CourseMembership, Task, TaskVersion, User
+from .python_basics import COURSE_CODE as PYTHON_DEMO_COURSE_CODE
 
 router = APIRouter(prefix="/api/product/teacher", tags=["stage06-operations"])
 auth_router = APIRouter(prefix="/api/product/auth", tags=["stage06-demo-auth"])
@@ -61,9 +62,13 @@ async def demo_login(
 
     student_account = os.environ.get("DEMO_STUDENT_ACCOUNT", "demo_student")
     teacher_account = os.environ.get("DEMO_TEACHER_ACCOUNT", "demo_teacher")
+    teacher2_account = os.environ.get("DEMO_TEACHER2_ACCOUNT", "demo_teacher2")
+    teacher3_account = os.environ.get("DEMO_TEACHER3_ACCOUNT", "demo_teacher3")
     credentials = {
         student_account: ("student", os.environ.get("DEMO_STUDENT_PASSWORD", ""), "student.rc06@demo.invalid"),
         teacher_account: ("teacher", os.environ.get("DEMO_TEACHER_PASSWORD", ""), "teacher.rc06@demo.invalid"),
+        teacher2_account: ("teacher", os.environ.get("DEMO_TEACHER2_PASSWORD", "123456"), "teacher2.rc06@demo.invalid"),
+        teacher3_account: ("teacher", os.environ.get("DEMO_TEACHER3_PASSWORD", "123456"), "teacher3.rc06@demo.invalid"),
     }
     configured = all(item[1] for item in credentials.values())
     if not configured:
@@ -87,12 +92,14 @@ async def demo_login(
 
     attempt_id: str | None = None
     if role == "student":
+        python_course = await session.scalar(select(Course).where(Course.code == PYTHON_DEMO_COURSE_CODE))
+        selected_course_id = python_course.id if python_course is not None else course.id
         attempt_id = await session.scalar(
             select(Attempt.id)
             .join(TaskVersion, Attempt.task_version_id == TaskVersion.id)
             .join(Task, TaskVersion.task_id == Task.id)
-            .where(Task.course_id == course.id, Attempt.learner_id == user.id)
-            .order_by(Attempt.created_at.desc())
+            .where(Task.course_id == selected_course_id, Attempt.learner_id == user.id)
+            .order_by(Task.task_key.asc(), Attempt.created_at.desc())
             .limit(1)
         )
         if attempt_id is None:

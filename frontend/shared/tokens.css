@@ -56,6 +56,41 @@
   text-rendering: optimizeLegibility;
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --border: #303b4d;
+  --border-strong: #536174;
+  --surface-canvas: #0e141e;
+  --surface-panel: #172130;
+  --surface-subtle: #1d2a3b;
+  --surface-selected: #19365d;
+  --text-primary: #edf3fb;
+  --text-secondary: #c4cfdd;
+  --text-muted: #a9b8ca;
+  --accent: #8bb5ff;
+  --accent-hover: #a9c8ff;
+  --accent-soft: #183761;
+  --success: #73d6a9;
+  --success-soft: #143b30;
+  --warning: #f6cd70;
+  --warning-soft: #41351e;
+  --danger: #ff9b95;
+  --danger-soft: #42282b;
+  --focus: #b4d0ff;
+  --shadow-float: 0 18px 48px rgba(0, 0, 0, 0.42);
+  --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-raised: 0 6px 18px rgba(0, 0, 0, 0.3);
+  --status-info-border: #345079;
+  --status-info-bg: #172c49;
+  --status-info-text: #b7d2fa;
+  --status-success-border: #27624f;
+  --status-success-bg: #143b30;
+  --status-warning-border: #69542c;
+  --status-warning-bg: #41351e;
+  --status-danger-border: #77434a;
+  --status-danger-bg: #42282b;
+}
+
 * { box-sizing: border-box; }
 html, body, #root { min-width: 0; min-height: 100%; margin: 0; }
 body { background: var(--surface-canvas); color: var(--text-primary); font-size: var(--text-body); line-height: var(--line-body); }
@@ -64,6 +99,24 @@ button { color: inherit; }
 button, input, textarea, summary { transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 ::selection { background: #c9dbff; color: var(--text-primary); }
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-toggle:hover { background: var(--surface-subtle); color: var(--text-primary); }
+.theme-toggle svg { width: 17px; height: 17px; }
+.login-page > .theme-toggle { position: absolute; z-index: 2; top: 22px; right: 28px; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -9,14 +9,29 @@ from pathlib import Path
 def load_sources(path: str) -> list[dict]:
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(payload, list):
-        raise ValueError("FAQ资料必须是列表")
+        raise TypeError("FAQ资料必须是列表")
     return payload
 
 
+GENERIC_KEYWORDS = {"学生", "学校", "实习单位"}
+
+
+def matched_keywords(question: str, item: dict) -> list[str]:
+    """返回真正能区分问题主题的关键词，避免宽泛词造成误命中。"""
+    normalized_question = question.strip().lower()
+    return [
+        keyword
+        for keyword in item.get("keywords", [])
+        if keyword not in GENERIC_KEYWORDS and keyword.lower() in normalized_question
+    ]
+
+
 def retrieve(question: str, sources: list[dict]) -> list[dict]:
-    # TODO: 学生根据问题文本、关键词和适用范围实现检索。
-    # 当前故意返回空列表，用于真实诊断与分层指导验证。
-    return []
+    results = []
+    for item in sources:
+        # TODO：调用 matched_keywords；有具体关键词命中时，把 item 加入 results。
+        pass
+    return results
 
 
 def answer(question: str, sources: list[dict]) -> dict:
@@ -24,10 +39,11 @@ def answer(question: str, sources: list[dict]) -> dict:
     if not hits:
         return {"answer": "现有资料不足，无法给出可靠结论。", "citations": [], "scope": None}
     first = hits[0]
+    # TODO：把下方三个空字符串替换为 first 中对应的字段。
     return {
         "answer": first["answer"],
-        "citations": [{"title": first["source_title"], "url": first["source"]}],
-        "scope": first["scope"],
+        "citations": [{"title": first["source_title"], "url": "", "authority": ""}],
+        "scope": "",
     }
 
 

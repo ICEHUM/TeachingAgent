@@ -6,10 +6,11 @@ import asyncio
 import difflib
 import hashlib
 import json
+import logging
 import re
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -18,10 +19,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agent.workspace import AttemptWorkspaceManager
+from app.agent.interactive_runner import (
+    InteractivePythonManager,
+    TerminalAlreadyRunning,
+    TerminalInputLimit,
+    TerminalNotRunning,
+)
+from app.agent.workspace import AttemptWorkspaceManager, _tree_digest
 from app.teaching_control.state import TeachingEvent as GraphEvent
 
 from .api import current_user, db_session, fail
+from .faq import DEFAULT_TASK_POLICY
 from .models import (
     Attempt,
     Course,
@@ -40,34 +48,99 @@ from .models import (
     TeachingEvent,
     User,
 )
+from .python_basics import POLICY as PYB01_POLICY
+from .python_basics import task_pack_for
 from .reviews import ReviewService
 from .service import BusinessRuleError, BusinessService
 
 router = APIRouter(prefix="/api/product", tags=["stage05a-product"])
+logger = logging.getLogger(__name__)
 service = BusinessService()
 reviews = ReviewService(service)
 
+# Server-owned list for the student console. The teaching runtime forces this list from
+# the same task policy, so an advisory run can never reach a graded tool.
+SELF_SERVICE_TOOLS = tuple(DEFAULT_TASK_POLICY["self_service_tools"])
+SELF_SERVICE_TOOL_LABELS = {
+    "run_student_program": "运行我的程序",
+    "inspect_runtime_error": "检查语法错误",
+    "run_python_sample": "试运行样例 2 与 3",
+    "run_python_trace": "逐行调试公开样例",
+}
+CONSOLE_STDOUT_CHARS = 8192
+CONSOLE_STDERR_CHARS = 4096
+
 REQUIREMENT_NAMES = {
+    "addition_public_tests": "公开样例检查",
+    "addition_hidden_tests": "提交边界检查",
+    "passing_public_tests": "公开样例检查",
+    "passing_hidden_tests": "提交边界检查",
+    "traversal_public_tests": "公开样例检查",
+    "traversal_hidden_tests": "提交边界检查",
     "explain_scope": "说明任务边界",
     "identify_citation_rule": "识别引用规则",
     "source_manifest": "资料正常加载",
     "source_quality_review": "资料质量复核",
     "retrieval_public_tests": "已知问题能够命中",
     "retrieval_observation": "已提交调试观察",
-    "answer_public_tests": "回答符合基础测试",
-    "citation_static_check": "回答包含来源引用",
+    "answer_public_tests": "实现 answer()，回答正文来自命中资料",
+    "citation_static_check": "返回 citations 和适用范围 scope",
     "unknown_question_test": "未知问题不伪造命中",
     "boundary_transfer": "完成边界迁移任务",
     "delivery_static_check": "交付文件完整",
     "delivery_review": "教师完成交付复核",
 }
+REQUIREMENT_STUDENT_GUIDANCE = {
+    "addition_public_tests": {"goal": "读取两行整数并只输出相加结果。", "success": "公开样例 2+3 和 0+7 都正确。"},
+    "addition_hidden_tests": {"goal": "提交时验证同一程序能处理题面范围内的其他整数。", "success": "边界用例均通过。"},
+    "passing_public_tests": {"goal": "用 if/else 判断分数是否达到 60 分。", "success": "59 与 60 的公开样例均通过。"},
+    "passing_hidden_tests": {"goal": "提交时验证 0–100 范围内的其他分数。", "success": "边界用例均通过。"},
+    "traversal_public_tests": {"goal": "遍历 numbers，累加并输出总和。", "success": "三个数与空列表的公开样例均通过。"},
+    "traversal_hidden_tests": {"goal": "提交时验证不同长度和整数的列表。", "success": "边界用例均通过。"},
+    "answer_public_tests": {
+        "goal": "新增 answer(question, sources)，先调用 retrieve()，再使用首条命中资料的 answer。",
+        "success": "返回字典中的 answer 与命中资料一致；没有命中时明确说明资料不足。",
+    },
+    "citation_static_check": {
+        "goal": "在返回字典中加入 citations 和 scope。",
+        "success": "citations[0] 包含 title、url、authority；scope 保留资料适用范围。",
+    },
+}
+REQUIREMENT_DISPLAY_ORDER = {
+    key: index
+    for index, key in enumerate(
+        (
+            "explain_scope",
+            "identify_citation_rule",
+            "source_manifest",
+            "source_quality_review",
+            "retrieval_public_tests",
+            "retrieval_observation",
+            "answer_public_tests",
+            "citation_static_check",
+            "unknown_question_test",
+            "boundary_transfer",
+            "delivery_static_check",
+            "delivery_review",
+        )
+    )
+}
+STAGE_CHECK_TOOLS = {
+    "write_program": ("run_python_public_tests",),
+    "understand_requirements": ("inspect_task_brief",),
+    "prepare_sources": ("inspect_workspace",),
+    "implement_retrieval": ("run_faq_tests",),
+    "validate_boundaries": ("run_faq_tests", "validate_transfer"),
+    "deliver": ("inspect_delivery",),
+    "generate_cited_answer": ("validate_answer_citations", "validate_answer"),
+}
 STAGE_OBJECTIVES = {
-    "understand_requirements": "说明 FAQ 服务要解决的问题，并明确回答必须带来源。",
-    "prepare_sources": "准备结构清晰、可追溯的 FAQ 资料。",
-    "implement_retrieval": "让已知问题命中资料，同时让未知问题保持无结果。",
-    "generate_cited_answer": "基于命中资料生成带来源的回答。",
-    "validate_boundaries": "验证无法回答的问题不会被模型伪造。",
-    "deliver": "整理运行说明与可验收交付物。",
+    "understand_requirements": "明确校园服务问答要解决的问题，并说明回答必须来自资料、保留来源。",
+    "prepare_sources": "准备三条结构清晰、可追溯的校园服务资料。",
+    "implement_retrieval": "让密码重置、实训室开放等已知问题命中资料，同时让资料外问题保持无结果。",
+    "generate_cited_answer": "在 faq_app.py 新增 answer(question, sources)：回答正文取自命中资料，并保留来源标题、链接和适用范围。",
+    "validate_boundaries": "验证资料外问题明确返回无法回答，不凭空编造答案。",
+    "deliver": "整理运行说明与可复现的校园服务问答交付物。",
 }
 ALLOWED_FILE_SUFFIXES = {".py", ".json", ".md", ".txt", ".toml", ".yaml", ".yml"}
 MAX_FILE_BYTES = 512 * 1024
@@ -94,6 +167,7 @@ class SnapshotCreate(BaseModel):
     operation_id: str = Field(min_length=8, max_length=160)
     expected_file_hash: str | None = None
     expected_file_path: str = Field(default="faq_app.py", min_length=1, max_length=240)
+    reuse_unchanged: bool = False
 
 
 class RunCreate(BaseModel):
@@ -102,6 +176,27 @@ class RunCreate(BaseModel):
     snapshot_id: str
     expected_state_version: int
     observation: str = Field(default="", max_length=1200)
+
+
+class ProgramRunCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: str = Field(min_length=8, max_length=160)
+    snapshot_id: str
+    expected_state_version: int
+    tool: str = "run_student_program"
+    stdin_text: str | None = Field(default=None, max_length=4096)
+
+
+class TerminalStartCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: str = Field(min_length=8, max_length=160)
+    snapshot_id: str
+    expected_state_version: int
+
+
+class TerminalInputCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    line: str = Field(max_length=1024)
 
 
 class GuidanceCreate(BaseModel):
@@ -230,6 +325,8 @@ def _safe_payload(payload: dict[str, Any]) -> dict[str, Any]:
                 "model", "latency_ms", "success", "fallback_reason",
             )
         }
+        if guidance.get("success") is not True:
+            clean["guidance"].update(message="", next_step="", evidence_refs=[])
     return clean
 
 
@@ -237,10 +334,20 @@ def _event_label(event: TeachingEvent) -> str:
     payload = event.payload or {}
     event_type = payload.get("event_type") or event.event_type
     decision = payload.get("decision")
+    if event_type == "help_requested":
+        return "学生请求教师帮助"
+    if event_type == "teacher_feedback":
+        return "教师已给出指导"
     if event_type == "stage_advanced":
         return "阶段验收通过，进入下一阶段"
     if decision == "execute_tool":
         status = payload.get("check_status")
+        if payload.get("tool_name") in (*SELF_SERVICE_TOOLS, *PYB01_POLICY["self_service_tools"]):
+            return {
+                "passed": "学生自己运行程序（正常结束）",
+                "student_failure": "学生自己运行程序（报错）",
+                "infrastructure_failure": "学生自运行时环境异常",
+            }.get(status, "学生自己运行程序")
         return {"passed": "运行检查通过", "student_failure": "运行检查未通过", "infrastructure_failure": "运行环境异常"}.get(status, "运行实训检查")
     if decision == "generate_guidance":
         level = payload.get("help_level")
@@ -275,8 +382,10 @@ async def _workbench_view(
     definitions = list((await session.scalars(
         select(RequirementDefinition)
         .where(RequirementDefinition.task_stage_id == current_stage.id)
-        .order_by(RequirementDefinition.id)
     )).all())
+    pack = task_pack_for(f"{task.task_key}-{version.version}")
+    definitions.sort(key=lambda item: (0 if item.requirement_key == pack.public_requirement else 1)
+                     if pack is not None else REQUIREMENT_DISPLAY_ORDER.get(item.requirement_key, 999))
     results = list((await session.scalars(
         select(RequirementResult)
         .where(RequirementResult.attempt_id == attempt.id)
@@ -294,6 +403,22 @@ async def _workbench_view(
     interventions = list((await session.scalars(
         select(Intervention).where(Intervention.attempt_id == attempt.id).order_by(Intervention.created_at.desc())
     )).all())
+    teacher_feedback_messages = [
+        {"message": event.payload.get("message"), "time": event.created_at.isoformat(), "source": "teacher"}
+        for event in events
+        if event.event_type == "teacher_feedback"
+        and (event.payload or {}).get("stage") == current_stage.stage_key
+    ]
+    # A resolved intervention also has a response, but the default response is
+    # a system status update. Prefer an authored teacher message when one exists
+    # so a later system transition cannot hide the actual guidance.
+    system_feedback_messages = [
+        {"message": item.response, "time": item.resolved_at.isoformat(), "source": "system"}
+        for item in interventions if item.status == "RESOLVED" and item.response and item.resolved_at
+    ]
+    teacher_feedback = max(teacher_feedback_messages, key=lambda item: item["time"], default=None)
+    if teacher_feedback is None:
+        teacher_feedback = max(system_feedback_messages, key=lambda item: item["time"], default=None)
     source_root = manager.source_directory(attempt.id)
     files = []
     for path in sorted(item for item in source_root.rglob("*") if item.is_file() and not item.is_symlink()):
@@ -306,6 +431,7 @@ async def _workbench_view(
         event
         for event in events
         if isinstance((event.payload or {}).get("guidance"), dict)
+        and (event.payload or {}).get("guidance", {}).get("success") is True
         and (event.payload or {}).get("stage") == current_stage.stage_key
         and latest_snapshot is not None
         and (event.payload or {}).get("snapshot_id") == latest_snapshot.id
@@ -321,13 +447,21 @@ async def _workbench_view(
         for event in events
     ]
     trace: list[dict[str, Any]] = []
+    evaluator_by_operation = {item.operation_id: item.evaluator for item in results}
     for event in events:
         payload = event.payload or {}
         decision = payload.get("decision")
         if decision == "execute_tool":
+            tool_operation_id = f"tool:{event.operation_id.removeprefix('persist:')}"
+            evaluator = evaluator_by_operation.get(tool_operation_id, "")
+            executor_label = (
+                "Python Runner 运行证据" if evaluator.startswith("docker_runner:") else
+                "OpenHands 实训证据" if evaluator.startswith("openhands:") else
+                "隔离运行证据"
+            )
             trace.extend([
                 {"kind": "student", "label": "学生行为", "detail": "提交当前 Snapshot 并运行验收"},
-                {"kind": "openhands", "label": "OpenHands 实训证据", "detail": _event_label(event)},
+                {"kind": "executor", "label": executor_label, "detail": _event_label(event)},
                 {"kind": "evaluator", "label": "RequirementEvaluator", "detail": "按 Snapshot 聚合版本化验收结果"},
                 {"kind": "langgraph", "label": "LangGraph 教学决策", "detail": f"服务端路由：{decision}"},
             ])
@@ -335,7 +469,7 @@ async def _workbench_view(
             guidance = payload.get("guidance") or {}
             trace.append({
                 "kind": "deepseek", "label": "DeepSeek 教学表达",
-                "detail": guidance.get("message") or "使用安全模板指导",
+                "detail": guidance.get("message") if guidance.get("success") is True else "模型未生成可用建议",
             })
     stage_objectives = (version.policy or {}).get("stage_objectives", {})
     requirement_names = (version.policy or {}).get("requirement_names", {})
@@ -361,10 +495,8 @@ async def _workbench_view(
         "stage": {
             "id": current_stage.id, "key": current_stage.stage_key, "title": current_stage.title,
             "position": current_stage.position, "total": len(stages),
-            "objective": stage_objectives.get(
-                current_stage.stage_key,
-                STAGE_OBJECTIVES.get(current_stage.stage_key, "完成本阶段验收项。"),
-            ),
+            "objective": STAGE_OBJECTIVES.get(current_stage.stage_key)
+            or stage_objectives.get(current_stage.stage_key, "完成本阶段验收项。"),
         },
         "stages": [
             {"key": item.stage_key, "title": item.title, "position": item.position,
@@ -379,9 +511,16 @@ async def _workbench_view(
             {
                 "id": definition.id,
                 "key": definition.requirement_key,
-                "name": (definition.config or {}).get("display_name")
+                "name": REQUIREMENT_NAMES.get(definition.requirement_key)
+                or (definition.config or {}).get("display_name")
                 or requirement_names.get(definition.requirement_key)
-                or REQUIREMENT_NAMES.get(definition.requirement_key, definition.requirement_key),
+                or definition.requirement_key,
+                "student_goal": REQUIREMENT_STUDENT_GUIDANCE.get(
+                    definition.requirement_key, {}
+                ).get("goal", ""),
+                "success_criteria": REQUIREMENT_STUDENT_GUIDANCE.get(
+                    definition.requirement_key, {}
+                ).get("success", ""),
                 "kind": definition.kind,
                 "required": definition.required,
                 "status": current_results.get(definition.id).status if definition.id in current_results else "NOT_RUN",
@@ -415,7 +554,15 @@ async def _workbench_view(
             if latest_snapshot else None
         ),
         "files": files,
+        "teacher_feedback": teacher_feedback,
+        "help_requested": next((event.event_type == "help_requested" for event in reversed(events)
+                                if event.event_type in {"help_requested", "teacher_feedback"}), False),
         "guidance": latest_guidance,
+        "guidance_generated_at": guidance_events[-1].created_at.isoformat() if guidance_events else None,
+        "guidance_snapshot": (
+            {"id": latest_snapshot.id, "label": _snapshot_label(latest_snapshot)}
+            if latest_guidance and latest_snapshot else None
+        ),
         "guidance_history": [
             {"time": event.created_at.isoformat(), **_safe_payload(event.payload or {}).get("guidance", {})}
             for event in guidance_events
@@ -423,6 +570,7 @@ async def _workbench_view(
         "student_observation": next((
             str((event.payload or {}).get("student_observation"))
             for event in reversed(events) if (event.payload or {}).get("student_observation")
+            and (event.payload or {}).get("stage") == current_stage.stage_key
         ), ""),
         "intervention": (
             {"id": interventions[0].id, "status": interventions[0].status,
@@ -431,6 +579,10 @@ async def _workbench_view(
         ),
         "timeline": timeline,
         "agent_trace": trace[-12:],
+        "self_service_tools": [
+            {"name": name, "label": SELF_SERVICE_TOOL_LABELS.get(name, name)}
+            for name in (PYB01_POLICY["self_service_tools"] if pack is not None else SELF_SERVICE_TOOLS)
+        ],
         "latest_submission": await _submission_summary(session, attempt_id=attempt.id),
     }
 
@@ -455,6 +607,32 @@ async def _submission_summary(session: AsyncSession, *, attempt_id: str) -> dict
             "published_at": grade.published_at.isoformat(),
         },
     }
+
+
+@router.get("/student/assignments")
+async def student_assignments(
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    if user.system_role != "student":
+        raise HTTPException(403, "student_role_required")
+    rows = list((await session.execute(
+        select(Attempt, Task, TaskVersion, Course)
+        .join(TaskVersion, Attempt.task_version_id == TaskVersion.id)
+        .join(Task, TaskVersion.task_id == Task.id)
+        .join(Course, Task.course_id == Course.id)
+        .join(CourseMembership, CourseMembership.course_id == Course.id)
+        .where(Attempt.learner_id == user.id,
+               CourseMembership.user_id == user.id,
+               CourseMembership.role == "student")
+        .order_by(Course.name, Task.task_key, Attempt.created_at.desc())
+    )).all())
+    return {"assignments": [
+        {"attempt_id": attempt.id, "task_key": task.task_key, "task_title": task.title,
+         "task_version": version.version, "course_name": course.name,
+         "status": attempt.status}
+        for attempt, task, version, course in rows
+    ]}
 
 
 @router.get("/attempts/{attempt_id}/workbench")
@@ -507,11 +685,12 @@ async def save_file(
         raise HTTPException(409, detail={"code": "snapshot_conflict", "message": "文件已在其他位置更新，请重新载入后再保存"})
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".saving")
-    temporary.write_text(body.content, encoding="utf-8")
+    content = body.content.replace("\r\n", "\n").replace("\r", "\n")
+    temporary.write_text(content, encoding="utf-8", newline="\n")
     temporary.replace(path)
     return {
         "path": file_path,
-        "hash": _file_hash(body.content),
+        "hash": _file_hash(content),
         "saved_at": datetime.now(UTC).isoformat(),
         "created": created,
     }
@@ -601,6 +780,13 @@ async def create_snapshot(
         current = checked_path.read_text(encoding="utf-8") if checked_path.exists() else ""
         if _file_hash(current) != body.expected_file_hash:
             raise HTTPException(409, detail={"code": "snapshot_conflict", "message": "代码在保存后又发生了变化。请重新保存，再创建检查版本。"})
+    if body.reuse_unchanged:
+        latest = await _latest_snapshot(session, attempt.id)
+        if latest and latest.snapshot_ref.rsplit("#", 1)[-1] == _tree_digest(manager.source_directory(attempt.id)):
+            session.add(OperationLedger(scope=scope, operation_id=body.operation_id, status="COMPLETED",
+                result_ref=f"snapshot:{latest.id}", result_payload={"sequence": latest.sequence}))
+            await session.commit()
+            return {"id": latest.id, "sequence": latest.sequence, "label": _snapshot_label(latest), "duplicate": True}
     sequence = int(await session.scalar(select(func.coalesce(func.max(Snapshot.sequence), 0)).where(Snapshot.attempt_id == attempt.id))) + 1
     snapshot_id = str(uuid4())
     _, snapshot_ref = manager.create_snapshot(attempt_id=attempt.id, snapshot_id=snapshot_id)
@@ -625,9 +811,10 @@ def _graph_event(
     *,
     attempt: Attempt,
     user: User,
-    body: RunCreate | GuidanceCreate,
+    body: RunCreate | GuidanceCreate | ProgramRunCreate,
     event_type: str,
     task_version: str,
+    requested_tool: str = "run_faq_tests",
     evidence_refs: list[str] | None = None,
     evidence_summary: str = "",
 ) -> GraphEvent:
@@ -643,15 +830,125 @@ def _graph_event(
         "snapshot_id": body.snapshot_id,
         "evidence_refs": list(evidence_refs or []),
         "evidence_summary": evidence_summary,
-        "student_observation": body.observation.strip(),
+        "student_observation": str(getattr(body, "observation", "") or "").strip(),
         "failure_origin": "none",
         "requested_guidance_kind": "question",
-        "requested_tool": "run_faq_tests" if event_type == "run_tool" else "",
+        "requested_tool": requested_tool if event_type == "run_tool" else "",
+        "stdin_text": body.stdin_text if isinstance(body, ProgramRunCreate) else None,
     }
 
 
+def _python_error_location(text: str) -> dict[str, Any] | None:
+    matches = re.findall(r'File "/workspace/student/([^"]+)", line (\d+)', text)
+    if not matches:
+        return None
+    file_name, line_number = matches[-1]
+    return {"file": file_name, "line": int(line_number)}
+
+
+def _console_view(
+    *,
+    attempt: Attempt,
+    operation_id: str,
+    requested_tool: str,
+    snapshot: Snapshot | None,
+    state: dict[str, Any],
+    manager: AttemptWorkspaceManager,
+) -> dict[str, Any]:
+    """Bounded raw output of one advisory run, read from its recorded artifact."""
+    digest = hashlib.sha256(f"tool:{operation_id}".encode()).hexdigest()
+    artifact_path = manager.evidence_directory(attempt.id) / f"{digest}.artifact.json"
+    artifact: dict[str, Any] = {}
+    if artifact_path.is_file():
+        try:
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            artifact = {}
+    request_data = artifact.get("request") if isinstance(artifact.get("request"), dict) else {}
+    details = artifact.get("details") if isinstance(artifact.get("details"), dict) else {}
+    raw_stdout = str(artifact.get("stdout") or "")
+    raw_stderr = str(artifact.get("stderr") or "")
+    tool = str(request_data.get("tool_name") or requested_tool)
+    pack = task_pack_for(str(request_data.get("task_version") or ""))
+    sample = pack.public_cases[0] if pack and tool in {"run_python_sample", "run_python_trace"} else None
+    manual_stdin = request_data.get("stdin_text")
+    run_stdin = manual_stdin if isinstance(manual_stdin, str) else sample[1] if sample else None
+    input_label = sample[0] if sample and run_stdin == sample[1] else "空输入" if run_stdin == "" else "自定义输入"
+    structured = details.get("structured") if tool == "run_python_trace" and isinstance(details.get("structured"), dict) else {}
+    if structured:
+        raw_stdout = str(structured.get("stdout") or "")
+        raw_stderr = str(structured.get("stderr") or "")
+    trace = structured.get("trace") if isinstance(structured.get("trace"), list) else []
+    return {
+        "tool": tool,
+        "label": f"{'逐行调试' if tool == 'run_python_trace' else '试运行'} · {input_label}" if sample else SELF_SERVICE_TOOL_LABELS.get(tool, tool),
+        "status": str(artifact.get("status") or state.get("last_tool_status") or "unknown"),
+        "code": str(artifact.get("code") or "not_recorded"),
+        "exit_code": structured.get("exit_code") if isinstance(structured.get("exit_code"), int) else details.get("exit_code") if isinstance(details.get("exit_code"), int) else None,
+        "stdout": raw_stdout[:CONSOLE_STDOUT_CHARS],
+        "stdout_truncated": bool(structured.get("stdout_truncated")) or bool(artifact.get("stdout_truncated")) or len(raw_stdout) > CONSOLE_STDOUT_CHARS,
+        "stderr": raw_stderr[:CONSOLE_STDERR_CHARS],
+        "stderr_truncated": bool(structured.get("stderr_truncated")) or bool(artifact.get("stderr_truncated")) or len(raw_stderr) > CONSOLE_STDERR_CHARS,
+        "location": _python_error_location(raw_stderr or raw_stdout),
+        "sample_input": run_stdin,
+        "input_source": "sample" if sample and run_stdin == sample[1] else "custom" if manual_stdin is not None else None,
+        "trace": trace[:72],
+        "trace_truncated": bool(structured.get("trace_truncated")),
+        "snapshot": _snapshot_label(snapshot),
+        "snapshot_id": snapshot.id if snapshot is not None else None,
+        "operation": f"tool:{operation_id}"[:72],
+        "recorded": artifact_path.is_file(),
+        "state_version": state.get("state_version"),
+    }
+
+
+def _public_check_diagnosis(
+    manager: AttemptWorkspaceManager, *, attempt_id: str, snapshot_id: str, operation_id: str
+) -> str:
+    """Summarize only current-snapshot public diagnostics for a guidance request."""
+    digest = hashlib.sha256(operation_id.encode("utf-8")).hexdigest()
+    path = manager.evidence_directory(attempt_id) / f"{digest}.artifact.json"
+    try:
+        if not path.is_file() or path.is_symlink() or path.stat().st_size > 256_000:
+            return ""
+        artifact = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(artifact, dict):
+        return ""
+    request_data = artifact.get("request")
+    if not isinstance(request_data, dict) or (
+        request_data.get("attempt_id") != attempt_id
+        or request_data.get("snapshot_id") != snapshot_id
+        or request_data.get("tool_name") != "run_python_public_tests"
+    ):
+        return ""
+    details = artifact.get("details")
+    structured = details.get("structured") if isinstance(details, dict) else None
+    if not isinstance(structured, dict):
+        return ""
+    checks = structured.get("checks")
+    diagnoses: list[str] = []
+    if isinstance(checks, list):
+        for item in checks:
+            if not isinstance(item, dict) or item.get("passed"):
+                continue
+            code = item.get("diagnosis_code")
+            if isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", code) and code not in diagnoses:
+                diagnoses.append(code)
+    facts = ["observed_public_diagnosis=" + ",".join(diagnoses[:3])] if diagnoses else []
+    error = str(structured.get("error") or "")[-2400:]
+    exception_types = list(re.finditer(r"(?m)^([A-Za-z_][A-Za-z0-9_]*(?:Error|Exception)):", error))
+    if exception_types:
+        facts.append("observed_public_error=" + exception_types[-1].group(1))
+    location = _python_error_location(error)
+    if location and location["file"] == "main.py":
+        facts.append(f"observed_public_location=main.py:{location['line']}")
+    return " ".join(facts)
+
+
 async def _snapshot_requirement_evidence(
-    session: AsyncSession, *, attempt_id: str, snapshot_id: str
+    session: AsyncSession, *, manager: AttemptWorkspaceManager, attempt_id: str, snapshot_id: str
 ) -> tuple[list[str], str]:
     rows = list((await session.execute(
         select(RequirementResult, RequirementDefinition.requirement_key)
@@ -670,6 +967,15 @@ async def _snapshot_requirement_evidence(
     for result, requirement_key in rows:
         refs.extend(ref for ref in result.evidence_refs if ref not in refs)
         facts.append(f"{requirement_key}={result.status}")
+        if result.status == "NOT_SATISFIED" and requirement_key in {
+            "addition_public_tests", "passing_public_tests", "traversal_public_tests",
+        }:
+            diagnosis = _public_check_diagnosis(
+                manager, attempt_id=attempt_id, snapshot_id=snapshot_id,
+                operation_id=result.operation_id,
+            )
+            if diagnosis:
+                facts.append(diagnosis)
     return refs, "；".join(facts)
 
 
@@ -693,6 +999,133 @@ async def run_checks(
     task = await session.get(Task, version.task_id) if version else None
     if version is None or task is None:
         raise HTTPException(500, "attempt_context_incomplete")
+    current_stage = await session.get(TaskStage, attempt.current_stage_id)
+    check_tools = STAGE_CHECK_TOOLS.get(
+        current_stage.stage_key if current_stage else "", ("run_faq_tests",)
+    )
+    states: list[dict[str, Any]] = []
+    statuses: list[str] = []
+    expected_state_version = body.expected_state_version
+    try:
+        for index, tool_name in enumerate(check_tools):
+            operation_id = (
+                body.operation_id
+                if len(check_tools) == 1
+                else f"{body.operation_id[:124]}:{index}:{tool_name}"
+            )
+            part = body.model_copy(
+                update={
+                    "operation_id": operation_id,
+                    "expected_state_version": expected_state_version,
+                }
+            )
+            state = await _runtime(request).run_event(
+                attempt_id=attempt.id,
+                event=_graph_event(
+                    attempt=attempt,
+                    user=user,
+                    body=part,
+                    event_type="run_tool",
+                    task_version=f"{task.task_key}-{version.version}",
+                    requested_tool=tool_name,
+                ),
+                automatic_followup=index == len(check_tools) - 1,
+            )
+            states.append(cast(dict[str, Any], state))
+            error_code = str(state.get("error_code") or "")
+            decision = cast(dict[str, Any], state.get("decision") or {})
+            if decision.get("kind") == "reject" or error_code:
+                raise HTTPException(
+                    503,
+                    detail={
+                        "code": "check_policy_unavailable",
+                        "message": "本阶段检查配置暂不可用，代码和学习记录均已保留。",
+                        "reason": error_code or "CHECK_REJECTED",
+                    },
+                )
+            tool_status = state.get("last_tool_status")
+            if not tool_status:
+                raise HTTPException(
+                    503,
+                    detail={
+                        "code": "check_result_missing",
+                        "message": "检查未返回有效结果，代码和学习记录均已保留。",
+                    },
+                )
+            statuses.append(str(tool_status))
+            expected_state_version = int(state.get("state_version", expected_state_version))
+            if statuses[-1] == "infrastructure_failure" or state.get("current_stage") not in {None, current_stage.stage_key}:
+                break
+    except BusinessRuleError as exc:
+        raise fail(exc) from exc
+    except HTTPException as exc:
+        if isinstance(exc.detail, dict) and exc.detail.get("code") == "runtime_unavailable":
+            raise HTTPException(503, detail={"code": "openhands_unavailable", "message": "实训执行服务暂不可用"}) from exc
+        raise
+    except Exception as exc:
+        logger.exception("Practice check failed before an execution result was returned")
+        raise HTTPException(503, detail={"code": "openhands_unavailable", "message": "实训执行服务暂不可用"}) from exc
+    state = states[-1]
+    aggregate_status = (
+        "infrastructure_failure"
+        if "infrastructure_failure" in statuses
+        else "student_failure"
+        if "student_failure" in statuses
+        else "succeeded"
+    )
+    return {
+        "flow_status": state.get("flow_status"),
+        "last_tool_status": aggregate_status,
+        "help_level": state.get("help_level"),
+        "guidance": state.get("guidance"),
+        "stage_assessment": state.get("stage_assessment"),
+        "error_code": state.get("error_code"),
+        "state_version": state.get("state_version"),
+        "snapshot_id": state.get("latest_snapshot_id"),
+    }
+
+
+@router.post("/attempts/{attempt_id}/program-runs")
+async def run_program(
+    attempt_id: str,
+    body: ProgramRunCreate,
+    request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    """Run the learner's own program and return its raw output.
+
+    Advisory only: it records evidence and a teaching event, but it never writes a
+    requirement result, never counts as a learning failure and never triggers the
+    automatic model follow-up that a failed acceptance check does.
+    """
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id != user.id:
+        raise HTTPException(403, "student_run_required")
+    version = await session.get(TaskVersion, attempt.task_version_id)
+    task = await session.get(Task, version.task_id) if version else None
+    pack = task_pack_for(f"{task.task_key}-{version.version}") if task and version else None
+    allowed_tools = PYB01_POLICY["self_service_tools"] if pack is not None else SELF_SERVICE_TOOLS
+    if body.tool not in allowed_tools:
+        raise HTTPException(
+            422,
+            detail={"code": "tool_not_allowed", "message": "该运行方式不在本任务允许的范围内。"},
+        )
+    if body.stdin_text is not None and (
+        body.tool not in {"run_python_sample", "run_python_trace"}
+        or len(body.stdin_text.encode("utf-8")) > 4096
+    ):
+        raise HTTPException(
+            422,
+            detail={"code": "invalid_stdin", "message": "手动输入仅可用于 Python 试运行或调试，且不能超过 4 KB。"},
+        )
+    latest = await _latest_snapshot(session, attempt.id)
+    if latest is None or latest.id != body.snapshot_id:
+        raise HTTPException(409, detail={"code": "old_snapshot", "message": "当前代码已有更新。请创建新的检查版本后再运行。"})
+    if attempt.state_version != body.expected_state_version:
+        raise HTTPException(409, detail={"code": "stale_state_version", "message": "教学状态已更新，请刷新后重试"})
+    if version is None or task is None:
+        raise HTTPException(500, "attempt_context_incomplete")
     try:
         state = await _runtime(request).run_event(
             attempt_id=attempt.id,
@@ -702,23 +1135,133 @@ async def run_checks(
                 body=body,
                 event_type="run_tool",
                 task_version=f"{task.task_key}-{version.version}",
+                requested_tool=body.tool,
             ),
-            automatic_followup=True,
+            automatic_followup=False,
         )
     except BusinessRuleError as exc:
         raise fail(exc) from exc
     except Exception as exc:
         raise HTTPException(503, detail={"code": "openhands_unavailable", "message": "实训执行服务暂不可用"}) from exc
-    return {
-        "flow_status": state.get("flow_status"),
-        "last_tool_status": state.get("last_tool_status"),
-        "help_level": state.get("help_level"),
-        "guidance": state.get("guidance"),
-        "stage_assessment": state.get("stage_assessment"),
-        "error_code": state.get("error_code"),
-        "state_version": state.get("state_version"),
-        "snapshot_id": state.get("latest_snapshot_id"),
-    }
+    return _console_view(
+        attempt=attempt,
+        operation_id=body.operation_id,
+        requested_tool=body.tool,
+        snapshot=latest,
+        state=cast(dict[str, Any], state),
+        manager=_manager(request),
+    )
+
+
+def _terminal_manager(request: Request) -> InteractivePythonManager:
+    manager = getattr(request.app.state, "interactive_python", None)
+    if manager is None:
+        raise HTTPException(503, detail={"code": "runner_unavailable", "message": "Python 终端暂不可用。"})
+    return cast(InteractivePythonManager, manager)
+
+
+@router.post("/attempts/{attempt_id}/terminal-sessions")
+async def start_terminal_session(
+    attempt_id: str, body: TerminalStartCreate, request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id != user.id:
+        raise HTTPException(403, "student_run_required")
+    version = await session.get(TaskVersion, attempt.task_version_id)
+    task = await session.get(Task, version.task_id) if version else None
+    pack = task_pack_for(f"{task.task_key}-{version.version}") if task and version else None
+    if pack is None or "run_python_sample" not in PYB01_POLICY["self_service_tools"]:
+        raise HTTPException(422, detail={"code": "terminal_not_allowed", "message": "当前任务不支持交互式 Python 终端。"})
+    latest = await _latest_snapshot(session, attempt.id)
+    if latest is None or latest.id != body.snapshot_id:
+        raise HTTPException(409, detail={"code": "old_snapshot", "message": "当前代码已有更新，请重新运行。"})
+    if attempt.state_version != body.expected_state_version:
+        raise HTTPException(409, detail={"code": "stale_state_version", "message": "教学状态已更新，请刷新后重试。"})
+    try:
+        return await asyncio.to_thread(
+            _terminal_manager(request).start,
+            operation_id=body.operation_id, attempt_id=attempt.id, owner_id=user.id,
+            snapshot_id=latest.id, snapshot_label=_snapshot_label(latest),
+        )
+    except TerminalAlreadyRunning as exc:
+        raise HTTPException(409, detail={"code": "terminal_already_running", "message": "当前已有程序在运行，请先结束它。"}) from exc
+    except (OSError, RuntimeError) as exc:
+        logger.exception("Failed to start interactive Python terminal")
+        raise HTTPException(503, detail={"code": "runner_unavailable", "message": "Python 终端启动失败，请稍后重试。"}) from exc
+
+
+@router.get("/attempts/{attempt_id}/terminal-sessions/active")
+async def active_terminal_session(
+    attempt_id: str, request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id != user.id:
+        raise HTTPException(403, "student_run_required")
+    return {"session": _terminal_manager(request).active(attempt_id=attempt.id, owner_id=user.id)}
+
+
+async def _owned_terminal(
+    attempt_id: str, terminal_id: str, request: Request, session: AsyncSession, user: User,
+):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id != user.id:
+        raise HTTPException(403, "student_run_required")
+    terminal = _terminal_manager(request).get(terminal_id, attempt_id=attempt.id, owner_id=user.id)
+    if terminal is None:
+        raise HTTPException(404, detail={"code": "terminal_not_found", "message": "终端会话不存在或已过期。"})
+    return terminal
+
+
+@router.get("/attempts/{attempt_id}/terminal-sessions/{terminal_id}")
+async def terminal_session(
+    attempt_id: str, terminal_id: str, request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    terminal = await _owned_terminal(attempt_id, terminal_id, request, session, user)
+    return terminal.snapshot()
+
+
+@router.post("/attempts/{attempt_id}/terminal-sessions/{terminal_id}/input")
+async def terminal_input(
+    attempt_id: str, terminal_id: str, body: TerminalInputCreate, request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    terminal = await _owned_terminal(attempt_id, terminal_id, request, session, user)
+    try:
+        return await asyncio.to_thread(terminal.send_line, body.line)
+    except TerminalNotRunning as exc:
+        raise HTTPException(409, detail={"code": "terminal_not_running", "message": "程序已结束，请重新试运行。"}) from exc
+    except TerminalInputLimit as exc:
+        raise HTTPException(422, detail={"code": "terminal_input_limit", "message": "单行最多 1 KB，整次运行最多输入 4 KB。"}) from exc
+
+
+@router.post("/attempts/{attempt_id}/terminal-sessions/{terminal_id}/stop")
+async def stop_terminal_session(
+    attempt_id: str, terminal_id: str, request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    terminal = await _owned_terminal(attempt_id, terminal_id, request, session, user)
+    return await asyncio.to_thread(terminal.stop)
+
+
+@router.post("/attempts/{attempt_id}/terminal-sessions/{terminal_id}/eof")
+async def close_terminal_input(
+    attempt_id: str, terminal_id: str, request: Request,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)],
+):
+    terminal = await _owned_terminal(attempt_id, terminal_id, request, session, user)
+    try:
+        return await asyncio.to_thread(terminal.close_input)
+    except TerminalNotRunning as exc:
+        raise HTTPException(409, detail={"code": "terminal_not_running", "message": "输入已结束或程序已停止。"}) from exc
 
 
 @router.post("/attempts/{attempt_id}/guidance")
@@ -742,7 +1285,7 @@ async def request_guidance(
     if version is None or task is None:
         raise HTTPException(500, "attempt_context_incomplete")
     evidence_refs, evidence_summary = await _snapshot_requirement_evidence(
-        session, attempt_id=attempt.id, snapshot_id=body.snapshot_id
+        session, manager=_manager(request), attempt_id=attempt.id, snapshot_id=body.snapshot_id
     )
     try:
         state = await _runtime(request).run_event(
@@ -799,15 +1342,14 @@ async def evidence_detail(
             "code": str(item.get("code") or "check"),
             "passed": bool(item.get("passed")),
             "detail": str(item.get("detail") or "")[:240],
+            "diagnosis_code": str(item.get("diagnosis_code") or "")[:64],
         }
         for item in raw_checks
         if isinstance(item, dict)
     ]
     raw_error = str(structured.get("error") or artifact.get("stderr") or "")[-2400:]
-    location_match = re.search(
-        r'File "/workspace/student/([^\"]+)", line (\d+)', raw_error
-    )
     error_summary = raw_error.replace("/workspace/student/", "")
+    location = _python_error_location(raw_error)
     bounded_stdout = str(artifact.get("stdout") or "")[:2400]
     return {
         "snapshot": _snapshot_label(snapshot),
@@ -820,11 +1362,15 @@ async def evidence_detail(
         "stdout_summary": bounded_stdout,
         "stdout_truncated": bool(artifact.get("stdout_truncated")) or len(str(artifact.get("stdout") or "")) > len(bounded_stdout),
         "checks": checks,
+        "skill_evidence": [
+            {"skill_id": str(item.get("skill_id") or "")[:64],
+             "status": str(item.get("status") or "")[:32],
+             "case_code": str(item.get("case_code") or "")[:32]}
+            for item in structured.get("skill_evidence", [])
+            if isinstance(item, dict)
+        ][:8],
         "error_summary": error_summary,
-        "location": (
-            {"file": location_match.group(1), "line": int(location_match.group(2))}
-            if location_match else None
-        ),
+        "location": location,
         "artifacts": [
             {"kind": "证据清单", "ref": ref, "available": artifact_path.is_file()}
             for ref in result.evidence_refs
@@ -865,6 +1411,8 @@ async def teacher_classroom(
     course_ids = list((await session.scalars(select(CourseMembership.course_id).where(
         CourseMembership.user_id == user.id, CourseMembership.role.in_(["teacher", "owner"])
     ))).all())
+    courses = list((await session.scalars(select(Course).where(Course.id.in_(course_ids)).order_by(Course.name))).all()) if course_ids else []
+    course_by_id = {course.id: course for course in courses}
     attempts = list((await session.scalars(
         select(Attempt)
         .join(TaskVersion, Attempt.task_version_id == TaskVersion.id)
@@ -875,6 +1423,8 @@ async def teacher_classroom(
     items = []
     now = datetime.now(UTC)
     for attempt in attempts:
+        version = await session.get(TaskVersion, attempt.task_version_id)
+        task = await session.get(Task, version.task_id) if version else None
         learner = await session.get(User, attempt.learner_id)
         stage = await session.get(TaskStage, attempt.current_stage_id)
         intervention = await session.scalar(select(Intervention).where(
@@ -882,28 +1432,55 @@ async def teacher_classroom(
         ).order_by(Intervention.created_at.desc()).limit(1))
         submission = await reviews.latest_submission(session, attempt_id=attempt.id)
         grade = await session.scalar(select(FormalGrade).where(FormalGrade.submission_id == submission.id)) if submission else None
+        task_pack = task_pack_for(f"{task.task_key}-{version.version}") if task and version else None
+        latest_snapshot = await _latest_snapshot(session, attempt.id) if task_pack else None
+        public_check = await session.scalar(
+            select(RequirementResult)
+            .join(RequirementDefinition, RequirementResult.requirement_id == RequirementDefinition.id)
+            .where(
+                RequirementResult.attempt_id == attempt.id,
+                RequirementResult.snapshot_id == latest_snapshot.id,
+                RequirementDefinition.requirement_key == task_pack.public_requirement,
+            )
+            .order_by(RequirementResult.evaluated_at.desc(), RequirementResult.id.desc())
+            .limit(1)
+        ) if task_pack and latest_snapshot else None
         waiting = intervention and intervention.status in {"WAITING_TEACHER", "RESUME_FAILED"}
+        latest_help = await session.scalar(select(TeachingEvent).where(
+            TeachingEvent.attempt_id == attempt.id,
+            TeachingEvent.event_type.in_(["help_requested", "teacher_feedback"]),
+        ).order_by(TeachingEvent.created_at.desc()).limit(1))
+        requested_help = latest_help is not None and latest_help.event_type == "help_requested"
         pending_review = submission is not None and grade is None
-        if attempt.status == "completed" or grade is not None:
-            category = "completed"
-        elif waiting or pending_review:
+        if waiting or pending_review or requested_help:
             category = "attention"
+        elif attempt.status == "completed" or grade is not None:
+            category = "completed"
         else:
             category = "progress"
         reason = "正常学习中"
         if waiting:
             reason = intervention.reason
+        elif requested_help:
+            reason = "student_help_requested"
         elif pending_review:
             reason = "pending_review"
         elif grade is not None:
             reason = "grade_published"
-        wait_from = intervention.created_at if waiting else (submission.created_at if submission else None)
+        wait_from = intervention.created_at if waiting else latest_help.created_at if requested_help else (submission.created_at if submission else None)
         if wait_from is not None and wait_from.tzinfo is None:
             wait_from = wait_from.replace(tzinfo=UTC)
         wait_seconds = int((now - wait_from).total_seconds()) if category == "attention" and wait_from is not None else 0
         items.append({
             "attempt_id": attempt.id,
+            "created_at": attempt.created_at.isoformat() if attempt.created_at else None,
+            "student_id": attempt.learner_id,
             "student": learner.display_name if learner else "未知学生",
+            "course_id": task.course_id if task else None,
+            "course_code": course_by_id[task.course_id].code if task and task.course_id in course_by_id else None,
+            "task_key": task.task_key if task else None,
+            "task_title": task.title if task else "未知任务",
+            "public_check_status": public_check.status if public_check else "NOT_RUN",
             "stage": stage.title if stage else "未知阶段",
             "stage_key": stage.stage_key if stage else "",
             "reason": reason,
@@ -925,6 +1502,7 @@ async def teacher_classroom(
         })
     return {
         "teacher": {"id": user.id, "display_name": user.display_name},
+        "courses": [{"id": course.id, "code": course.code, "name": course.name} for course in courses],
         "groups": {
             "attention": [item for item in items if item["category"] == "attention"],
             "progress": [item for item in items if item["category"] == "progress"],
@@ -1012,6 +1590,27 @@ async def teacher_action(
         raise fail(exc) from exc
     except Exception as exc:
         raise HTTPException(503, detail={"code": "resume_failed", "message": "恢复教学流程失败，教师操作已保留，可安全重试"}) from exc
+    # Preserve an authored prompt separately from the intervention's generic
+    # response so the student can distinguish teacher guidance from system state.
+    authored_prompt = body.teacher_prompt.strip()
+    if authored_prompt:
+        await session.refresh(attempt)
+        try:
+            await _learning_message(
+                session,
+                attempt=attempt,
+                user=user,
+                body=LearningMessage(
+                    operation_id=f"teacher-feedback:{body.operation_id}"[:160],
+                    expected_state_version=attempt.state_version,
+                    message=authored_prompt,
+                ),
+                event_type="teacher_feedback",
+            )
+        except (BusinessRuleError, HTTPException):
+            # The intervention result is already committed; a concurrent state
+            # change must not turn a successful teacher action into a failure.
+            pass
     return {"status": resolved.status, "action": body.action, "flow_status": state.get("flow_status"), "guidance": state.get("guidance")}
 
 
@@ -1103,10 +1702,62 @@ def _snapshot_files(manager: AttemptWorkspaceManager, *, attempt_id: str, snapsh
 async def create_submission(
     attempt_id: str,
     body: SubmissionCreate,
+    request: Request,
     session: Annotated[AsyncSession, Depends(db_session)],
     user: Annotated[User, Depends(current_user)],
 ):
     attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    version = await session.get(TaskVersion, attempt.task_version_id)
+    task = await session.get(Task, version.task_id) if version else None
+    pack = task_pack_for(f"{task.task_key}-{version.version}") if task and version else None
+    if pack is not None:
+        latest = await _latest_snapshot(session, attempt.id)
+        if latest is None or latest.id != body.snapshot_id:
+            raise HTTPException(409, detail={"code": "old_snapshot", "message": "代码版本已变化，请返回工作台重新保存。"})
+        results = list((await session.execute(
+            select(RequirementResult, RequirementDefinition.requirement_key)
+            .join(RequirementDefinition, RequirementDefinition.id == RequirementResult.requirement_id)
+            .where(RequirementResult.attempt_id == attempt.id, RequirementResult.snapshot_id == latest.id)
+            .order_by(RequirementResult.evaluated_at, RequirementResult.id)
+        )).all())
+        current = {key: result for result, key in results}
+        if current.get(pack.public_requirement) is None or current[pack.public_requirement].status != "SATISFIED":
+            raise HTTPException(409, detail={"code": "public_check_required", "message": "请先返回工作台，让当前代码通过公开样例检查。"})
+        if current.get(pack.hidden_requirement) is None or current[pack.hidden_requirement].status != "SATISFIED":
+            try:
+                hidden = await _runtime(request).run_event(
+                    attempt_id=attempt.id,
+                    event=_graph_event(
+                        attempt=attempt, user=user,
+                        body=RunCreate(operation_id=f"submit-hidden:{body.operation_id}",
+                                       snapshot_id=body.snapshot_id,
+                                       expected_state_version=attempt.state_version),
+                        event_type="run_tool", task_version=f"{task.task_key}-{version.version}",
+                        requested_tool="run_python_hidden_tests",
+                    ),
+                    automatic_followup=False,
+                )
+            except BusinessRuleError as exc:
+                raise _product_fail(exc) from exc
+            except Exception as exc:
+                raise HTTPException(503, detail={"code": "execution_unavailable", "message": "提交检查环境暂不可用，当前代码和公开检查结果已保存。"}) from exc
+            status = hidden.get("last_tool_status")
+            if status == "student_failure":
+                raise HTTPException(409, detail={"code": "hidden_check_failed", "message": "边界检查未通过。请回到代码，核对程序是否适用于题面范围内的所有整数。"})
+            if status != "succeeded":
+                raise HTTPException(503, detail={"code": "execution_unavailable", "message": "提交检查暂不可用，当前代码和公开检查结果已保存。"})
+            hidden_result = await session.scalar(
+                select(RequirementResult)
+                .join(RequirementDefinition, RequirementDefinition.id == RequirementResult.requirement_id)
+                .where(RequirementResult.attempt_id == attempt.id,
+                       RequirementResult.snapshot_id == latest.id,
+                       RequirementDefinition.requirement_key == pack.hidden_requirement)
+                .order_by(RequirementResult.evaluated_at.desc(), RequirementResult.id.desc())
+                .limit(1)
+            )
+            if hidden_result is None or hidden_result.status != "SATISFIED":
+                raise HTTPException(503, detail={"code": "hidden_evidence_missing", "message": "边界检查未生成可核对证据，当前代码已保存，请稍后重试。"})
+            await session.refresh(attempt)
     try:
         submission, duplicate = await reviews.create_submission(
             session,
@@ -1135,9 +1786,10 @@ async def latest_submission_view(
     request: Request,
     session: Annotated[AsyncSession, Depends(db_session)],
     user: Annotated[User, Depends(current_user)],
+    preview: bool = False,
 ):
     attempt = await _attempt(session, attempt_id=attempt_id, user=user)
-    submission = await reviews.latest_submission(session, attempt_id=attempt.id)
+    submission = None if preview else await reviews.latest_submission(session, attempt_id=attempt.id)
     if submission is None:
         latest = await _latest_snapshot(session, attempt.id)
         if latest is None:
@@ -1150,7 +1802,7 @@ async def latest_submission_view(
             sequence=0,
             status="preview",
             explanation=attempt and "",
-            assistance=[],
+            assistance=await reviews.assistance_history(session, attempt_id=attempt.id),
         )
         preview.explanation = next((
             str((event.payload or {}).get("student_observation"))
@@ -1301,3 +1953,105 @@ async def teacher_requirement_review(
         "evaluator": result.evaluator,
         "operation_id": result.operation_id,
     }
+
+
+class LearningMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation_id: str = Field(min_length=8, max_length=160)
+    expected_state_version: int
+    message: str = Field(min_length=1, max_length=1200)
+
+
+async def _learning_message(session, *, attempt, user, body, event_type):
+    existing = await session.scalar(select(TeachingEvent).where(
+        TeachingEvent.attempt_id == attempt.id, TeachingEvent.operation_id == body.operation_id,
+    ))
+    if existing:
+        if existing.event_type != event_type or existing.payload.get("message") != body.message.strip():
+            raise HTTPException(409, "operation_payload_conflict")
+        return {"state_version": existing.state_version, "message": existing.payload.get("message")}
+    active = await session.scalar(select(Intervention).where(
+        Intervention.attempt_id == attempt.id,
+        Intervention.status.in_(["CREATING", "CHECKPOINT_FAILED", "WAITING_TEACHER", "RESUMING", "RESUME_FAILED"]),
+    ).limit(1))
+    if active:
+        raise HTTPException(409, {"code": "teacher_intervention_pending", "message": "已有教师介入事项，请在介入操作中处理。"})
+    message = body.message.strip()
+    if not message:
+        raise HTTPException(422, {"code": "message_required", "message": "请写下需要帮助的问题或指导内容。"})
+    if event_type == "help_requested":
+        recent = await session.scalar(select(TeachingEvent).where(
+            TeachingEvent.attempt_id == attempt.id,
+            TeachingEvent.event_type.in_(["help_requested", "teacher_feedback"]),
+        ).order_by(TeachingEvent.created_at.desc()).limit(1))
+        if recent and recent.event_type == "help_requested":
+            return {"state_version": attempt.state_version, "message": recent.payload.get("message")}
+    stage = await session.get(TaskStage, attempt.current_stage_id)
+    snapshot = await _latest_snapshot(session, attempt.id)
+    try:
+        event, _ = await service.record_event(session, attempt=attempt, actor_id=user.id,
+            operation_id=body.operation_id, event_type=event_type,
+            expected_state_version=body.expected_state_version,
+            payload={"message": message, "stage": stage.stage_key,
+                     "student_observation": message if event_type == "help_requested" else "",
+                     "snapshot_id": snapshot.id if snapshot else None})
+    except BusinessRuleError as exc:
+        raise _product_fail(exc) from exc
+    return {"state_version": event.state_version, "message": message}
+
+
+@router.post("/attempts/{attempt_id}/help")
+async def request_teacher_help(attempt_id: str, body: LearningMessage,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)]):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id != user.id:
+        raise HTTPException(403, "student_help_required")
+    return await _learning_message(session, attempt=attempt, user=user, body=body, event_type="help_requested")
+
+
+@router.post("/teacher/attempts/{attempt_id}/feedback")
+async def send_teacher_feedback(attempt_id: str, body: LearningMessage,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)]):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id == user.id or user.system_role not in {"teacher", "admin"}:
+        raise HTTPException(403, "teacher_role_required")
+    return await _learning_message(session, attempt=attempt, user=user, body=body, event_type="teacher_feedback")
+
+
+class StageReview(TeacherRequirementReview):
+    snapshot_id: str
+
+
+@router.post("/teacher/attempts/{attempt_id}/stage-reviews")
+async def review_current_stage(attempt_id: str, body: StageReview,
+    session: Annotated[AsyncSession, Depends(db_session)],
+    user: Annotated[User, Depends(current_user)]):
+    attempt = await _attempt(session, attempt_id=attempt_id, user=user)
+    if attempt.learner_id == user.id or user.system_role not in {"teacher", "admin"}:
+        raise HTTPException(403, "teacher_role_required")
+    latest = await _latest_snapshot(session, attempt.id)
+    if latest is None or latest.id != body.snapshot_id:
+        raise HTTPException(409, {"code": "old_snapshot", "message": "学生代码版本已更新，请重新查看后复核。"})
+    definition = await session.scalar(select(RequirementDefinition).where(
+        RequirementDefinition.task_stage_id == attempt.current_stage_id,
+        RequirementDefinition.requirement_key == body.requirement_key,
+        RequirementDefinition.kind == "TEACHER_REVIEW",
+    ))
+    if definition is None or body.status not in {"SATISFIED", "NOT_SATISFIED"}:
+        raise HTTPException(422, "teacher_review_required")
+    try:
+        record = await service.upsert_requirement_result(session, attempt=attempt,
+            requirement_id=definition.id, snapshot_id=latest.id,
+            operation_id=f"stage-review:{body.operation_id}"[:160], status=body.status,
+            evaluator="teacher_review_v1", evidence_refs=[f"teacher://{user.id}"], version=definition.version,
+            commit=False)
+        await _learning_message(session, attempt=attempt, user=user,
+            body=LearningMessage(operation_id=f"feedback:{body.operation_id}"[:160],
+                                 expected_state_version=attempt.state_version,
+                                 message=f"{REQUIREMENT_NAMES.get(body.requirement_key, body.requirement_key)}：{'通过' if body.status == 'SATISFIED' else '需要修改'}。{body.reason}"),
+            event_type="teacher_feedback")
+    except BusinessRuleError as exc:
+        raise _product_fail(exc) from exc
+    return {"id": record.id, "status": record.status, "snapshot_id": record.snapshot_id}

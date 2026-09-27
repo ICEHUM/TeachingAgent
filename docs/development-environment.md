@@ -32,7 +32,7 @@ Set-Location D:\TeachingAgent
 
 本次已通过：Python 包依赖一致性检查，四个 OpenHands 包及后端组件导入，终端工具、任务工具与 DockerWorkspace 导入，FastAPI 本地 HTTP 冒烟检查，以及学生端和教师端依赖解析与临时 React 页面生产构建。
 
-前端构建验证生成的临时文件位于 `.cache/frontend-verification/`；这些是验证夹具，不是业务页面。当前未实现学生端、教师端和业务 API。FastAPI 冒烟检查出现上游 Starlette 关于未来迁移 httpx2 的弃用提示，但检查通过。
+前端构建验证生成的临时文件位于 `.cache/frontend-verification/`；当前业务学生端、教师端和 FastAPI API 已在后续 Stage 03–06 落地。历史基线曾记录“尚未实现”，请以 [项目总说明](PROJECT_GUIDE_CN.md) 和当前代码为准。FastAPI 冒烟检查出现上游 Starlette 关于未来迁移 httpx2 的弃用提示，但检查通过。
 
 ## 运行环境与业务接入状态
 
@@ -48,4 +48,4 @@ Set-Location D:\TeachingAgent
 
 ## 框架方案更新
 
-2026-09-20 的 [功能设计 v2](functional-design-v2.md) 将 LangGraph 作为教学流程主框架，OpenHands 保留为受限实训执行层。LangGraph、持久检查点及教学业务尚未接入；现有依赖锁文件和环境验证结果继续描述已安装组件，实施时再添加并验证新依赖。
+2026-09-20 的 [功能设计 v2](functional-design-v2.md) 将 LangGraph 作为教学流程主框架，OpenHands 保留为受限实训执行层。后续 Stage 03–06 已接入 LangGraph、PostgreSQL checkpoint、业务 API、师生页面和固定 FAQ 演示；设计文档中的 P0/P1 仍是规划与验收基线，当前交付边界见 [项目总说明](PROJECT_GUIDE_CN.md)。

@@ -23,6 +23,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 ROOT = BACKEND.parent
 sys.path.insert(0, str(BACKEND))
 
+from app.agent.runner import DEFAULT_PYTHON_RUNNER_IMAGE
 from app.agent.teaching_llm import DeepSeekTeachingLLM
 from app.agent.workspace import (
     AttemptWorkspaceManager,
@@ -33,7 +34,7 @@ from app.agent.workspace import (
 from app.business.models import Attempt, Course, User
 from app.teaching_control.protocols import GuidanceRequest
 
-EXPECTED_HEAD = "20260921_0005"
+EXPECTED_HEAD = "20260927_0007"
 DEMO_COURSE = "DEMO-FAQ-001-RC06"
 DEMO_ATTEMPT = "24fa0a80-9b5f-55a9-a5b2-8ac6e03c66f7"
 
@@ -89,6 +90,15 @@ def main() -> None:
         image = config["server_image"]
         inspected = docker_command("image", "inspect", image, "--format", "{{.Id}}", timeout=20, check=False)
         checks.append(result("OpenHands Agent Server / image", "PASS" if inspected.returncode == 0 else "FAIL", "OpenHands 1.49.2 固定镜像存在" if inspected.returncode == 0 else "固定镜像不可用"))
+        runner_image = os.environ.get("TEACHING_PYTHON_RUNNER_IMAGE", DEFAULT_PYTHON_RUNNER_IMAGE).strip()
+        if runner_image:
+            runner_inspected = docker_command("image", "inspect", runner_image, "--format", "{{.Id}}", timeout=20, check=False)
+            checks.append(result(
+                "Python Runner / image", "PASS" if runner_inspected.returncode == 0 else "FAIL",
+                "固定 Python 镜像存在" if runner_inspected.returncode == 0 else "固定 Python 镜像不可用",
+            ))
+        else:
+            checks.append(result("Python Runner / image", "WARN", "已显式关闭，PYB-01 暂走旧执行器"))
         manager = AttemptWorkspaceManager()
         snapshot_id = "preflight-rc06"
         manager.create_snapshot(attempt_id=DEMO_ATTEMPT, snapshot_id=snapshot_id)
