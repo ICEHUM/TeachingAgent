@@ -26,8 +26,8 @@ $env:TEACHING_ENV = "DEMO"
 
 ## 云服务器试运行
 
-服务器需有 Python 3.12、Node.js、PostgreSQL 和 Docker。先创建数据库并执行 `deploy/bootstrap-postgres.sql`，在服务器环境中设置 `TEACHING_ENV=DEMO`、`TEACHING_DATABASE_URL`、`LANGGRAPH_CHECKPOINT_DATABASE_URL` 和模型密钥等变量。用数据库管理员连接设置 `TEACHING_ALEMBIC_DATABASE_URL`，在 `backend/` 运行 `uv sync --frozen` 和 `uv run alembic upgrade head`；随后运行 `uv run python scripts/stage06_demo.py init` 与 `uv run python scripts/seed_python_basics_demo.py` 初始化演示课堂。演示数据脚本要求 PostgreSQL 位于服务器本机。
+服务器需有 Python 3.12、Node.js、PostgreSQL 和 Docker。先创建数据库并执行 `deploy/bootstrap-postgres.sql`，在服务器环境中设置 `TEACHING_ENV=DEMO`、`TEACHING_DATABASE_URL`、`LANGGRAPH_CHECKPOINT_DATABASE_URL` 和模型密钥等变量。用数据库管理员连接设置 `TEACHING_ALEMBIC_DATABASE_URL`，在 `backend/` 运行 `uv sync --frozen`、`uv run alembic upgrade head` 和 `uv run python scripts/init_checkpoint.py`；随后运行 `uv run python scripts/stage06_demo.py init` 与 `uv run python scripts/seed_python_basics_demo.py` 初始化演示课堂。演示数据脚本要求 PostgreSQL 位于服务器本机。
 
-后端在 `backend/` 运行 `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`。前端在仓库根目录运行 `npm ci`，设置 `VITE_STUDENT_URL`、`VITE_TEACHER_URL` 为两个公开 HTTPS 地址，再分别运行 `npm run build --workspace @teachingagent/student` 和 `npm run build --workspace @teachingagent/teacher`。把两个 `dist` 目录作为静态站点发布，并将两站点的 `/api` 转发到后端。
+后端在 `backend/` 运行 `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000`。前端在仓库根目录运行 `npm ci`，设置 `VITE_STUDENT_URL`、`VITE_TEACHER_URL` 为实际访问地址，再分别运行 `npm run build --workspace @teachingagent/student` 和 `npm run build --workspace @teachingagent/teacher`。把两个 `dist` 目录发布在 `/` 和 `/teacher/`，并将 `/api` 转发到后端。
 
 当前试运行使用开发身份机制，只应在 VPN、IP 白名单等访问控制后面使用虚拟数据；正式开放前需要完善会话鉴权。
