@@ -16,7 +16,7 @@
 | `git status --short` | 无输出，工作区干净 |
 | hooks | 未启用；只有 Git 默认 `*.sample` 文件 |
 
-根目录已落位审核后的 `AGENTS.md`、`PRODUCT.md`、`DESIGN.md`，没有覆盖第三方依赖中的同名文件。新 Codex 会话确认 `impeccable` 和 `design-taste-frontend` 均可发现；Impeccable 有两个包含 `..` 的图标路径被 Codex 忽略，但 skill 本体可发现，本阶段没有启用 hooks。
+根目录已落位审核后的 `AGENTS.md`、`PRODUCT.md`、`DESIGN.md`，没有覆盖第三方依赖中的同名文件。新的开发会话确认 `impeccable` 和 `design-taste-frontend` 均可发现；Impeccable 有两个包含 `..` 的图标路径被开发工具忽略，但技能本体可发现，本阶段没有启用 hooks。
 
 ## 2. 代码树
 

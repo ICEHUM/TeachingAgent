@@ -11,7 +11,7 @@
     "project_skill_root_existed": false,
     "same_name_targets_existed": false,
     "git_hooks_existed": false,
-    "codex_hooks_existed": false,
+    "assistant_hooks_existed": false,
     "agents_hooks_existed": false
   },
   "helper_tests": {
@@ -71,13 +71,13 @@
   "hooks": {
     "activated": false,
     "git_hooks_existed_after": false,
-    "codex_hooks_existed_after": false,
+    "assistant_hooks_existed_after": false,
     "agents_hooks_existed_after": false
   },
-  "codex_activation": {
+  "assistant_activation": {
     "verified": false,
     "status": "pending_new_project_session",
-    "reason": "The current Codex turn initialized its skill catalog before installation and its working directory is not D:\\TeachingAgent."
+    "reason": "The current development session initialized its skill catalog before installation and its working directory is not D:\\TeachingAgent."
   },
   "overall_status": "skill_files_installed_activation_pending"
 }

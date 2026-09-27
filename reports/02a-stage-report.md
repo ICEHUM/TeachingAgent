@@ -52,7 +52,7 @@
 
 ## 风险与未完成项
 
-1. 阶段02A的 Codex 沙箱不能按命令名执行宿主 Docker CLI，因此当时未完成真实 PostgreSQL 验证。Stage 02B 已确认宿主 Docker Linux Engine 可用，并完成真实验证；详见 `reports/02b-stage-report.md`。
+1. 阶段02A的受限开发环境不能按命令名执行宿主 Docker CLI，因此当时未完成真实 PostgreSQL 验证。Stage 02B 已确认宿主 Docker Linux Engine 可用，并完成真实验证；详见 `reports/02b-stage-report.md`。
 2. Checkpoint 初始化采用官方幂等 `setup()`，但生产部署仍需加单实例 migration job 和失败告警。
 3. Stage 02B 已将 `X-User-Id` 限制在显式启用 `DEV_AUTH_ENABLED` 的 DEV/TEST 环境；生产认证本身仍待后续 OAuth/JWT 或可信网关接入。
 4. Graph resume runtime 以应用注入接口保留；本阶段没有接真实 OpenHands，也没有启动真实课堂 worker。

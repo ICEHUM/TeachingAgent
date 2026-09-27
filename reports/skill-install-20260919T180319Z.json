@@ -11,20 +11,20 @@
     "skills": "1.7.0"
   },
   "hooks_activated": false,
-  "codex_activation_verified": false,
+  "assistant_activation_verified": false,
   "skills": [
     {
       "name": "impeccable",
       "files_present": true,
       "origin": "https://github.com/pbakaus/impeccable",
-      "codex_activation_verified": false,
+      "assistant_activation_verified": false,
       "tree_sha256": "d87dbd7c3136eb23a60d3dde9643623ea011d54f9bddbf258ce6f2e955694968"
     },
     {
       "name": "design-taste-frontend",
       "files_present": true,
       "origin": "https://github.com/Leonxlnx/taste-skill",
-      "codex_activation_verified": false,
+      "assistant_activation_verified": false,
       "tree_sha256": "7631e9da7a7d3be4797fefd7ed86213d19db474e3d16683d42f66dee42457f90"
     }
   ],

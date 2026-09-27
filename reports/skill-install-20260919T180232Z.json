@@ -11,6 +11,6 @@
     "skills": "1.7.0"
   },
   "hooks_activated": false,
-  "codex_activation_verified": false,
+  "assistant_activation_verified": false,
   "error": "'NoneType' object has no attribute 'strip'"
 }

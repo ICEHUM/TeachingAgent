@@ -14,7 +14,7 @@
 
 - `D:\TeachingAgent` 不是 Git 仓库，无法用 commit 或 `git status` 建立可回滚基线。
 - 项目根目录没有 `AGENTS.md`、`PRODUCT.md`、`DESIGN.md`。缓存依赖中存在一个第三方 `AGENTS.md`，不属于本项目。
-- 根目录没有既有 `.agents/skills`、`.git/hooks`、`.codex/hooks` 或 `.agents/hooks`；技能安装前未发现同名目标。
+- 根目录没有既有 `.agents/skills`、`.git/hooks` 或 `.agents/hooks`；技能安装前未发现同名目标。
 - Python 锁文件：`backend/uv.lock`，476387 字节，SHA-256 `82299A4E7A475434F6D71F11509B6F39F5D8A5CE729929BB545814E0AF5C9CAF`。
 - 前端锁文件：`package-lock.json`，42653 字节，SHA-256 `11E345EE510FE928DEDCE4D4BD971F7377EAEAB409CC442608AFEA872AFEEE7D`。
 - 完成测试和技能安装后两个锁文件哈希不变。
@@ -96,7 +96,7 @@
 - 设置 `PYTHONUTF8=1` 后使用同一脚本重试成功；Impeccable 安装器版本 4.1.0，skills CLI 版本 1.7.0。
 - 最终 verify-only 退出码 0；`impeccable` 和 `design-taste-frontend` 的 `SKILL.md` 均存在且名称匹配，树哈希已记录。
 - 安装前后均没有 hooks 目录，脚本报告 `hooks_activated=false`。
-- 本轮开始时 Codex 技能目录已完成初始化，且当前任务工作目录不是 `D:\TeachingAgent`，所以“Codex 已发现并激活项目技能”尚未验证。应在以 `D:\TeachingAgent` 为项目根目录的新任务中确认。
+- 本轮开始时开发工具的技能目录已完成初始化，且当前任务工作目录不是 `D:\TeachingAgent`，所以“项目技能已被发现并激活”尚未验证。应在以 `D:\TeachingAgent` 为项目根目录的新任务中确认。
 
 ## 8 本轮变更文件
 
@@ -142,13 +142,13 @@ UI截图：本阶段不涉及界面修改，未运行浏览器检查，也没有
 - 未实时调用 DeepSeek；只核对配置和既有 2026-09-19 报告。
 - 未运行完整业务端到端流程，因为业务 API、前端、LangGraph、数据库和队列尚不存在。
 - 未做负载、安全渗透或课堂并发测试；双工作区通过不能推导全班并发能力。
-- 未在新 Codex 项目会话中确认项目技能可发现；文件安装已验证，激活待验证。
+- 未在新的项目会话中确认项目技能可发现；文件安装已验证，激活待验证。
 - 未运行 UI 测试，因为阶段00没有业务界面变更。
 
 ## 11 进入阶段01的条件
 
 1. 负责人审阅并确认本报告和 `00-risks.md`，明确允许进入阶段01。
-2. 在以 `D:\TeachingAgent` 为项目根目录的新 Codex 任务中确认 Impeccable 和 Taste 可发现；不能发现时先修正项目技能加载，不重复安装或启用 hooks。
+2. 在以 `D:\TeachingAgent` 为项目根目录的新任务中确认 Impeccable 和 Taste 可发现；不能发现时先修正项目技能加载，不重复安装或启用 hooks。
 3. 明确执行包治理文件的落位方式：项目根目前没有 AGENTS、PRODUCT、DESIGN，阶段01不能在未比较的情况下直接覆盖或假定已经合并。
 4. 在开始写业务代码前建立可回滚基线：优先初始化 Git；若暂不使用 Git，负责人需明确接受文件级快照方案。
 5. 阶段01继续遵守当前锁文件，不安装 LangGraph、不升级 OpenHands，除非阶段01指令明确要求并由负责人确认。

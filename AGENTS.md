@@ -1,4 +1,4 @@
-# Codex执行约定
+# 项目执行约定
 
 先读 `PRODUCT.md`、`DESIGN.md`、`docs/functional-design-v2.md`、`reports/00-baseline.md` 和当前阶段指令。以现有工程为基础作增量开发；不擅自更换课程、框架、依赖或目录。第三方 SDK 接口必须对照本地版本，不臆造方法。
 

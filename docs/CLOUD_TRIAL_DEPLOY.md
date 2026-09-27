@@ -5,7 +5,7 @@
 ## 服务组成
 
 - Python 3.12 后端：在 `backend/` 用锁文件 `uv sync --frozen` 安装，应用入口为 `app.main:app`。服务器使用 `uvicorn app.main:app --host 127.0.0.1 --port 8000`，由反向代理提供 HTTPS 和 `/api`、`/health`。
-- PostgreSQL：分别配置 `TEACHING_DATABASE_URL` 与 `LANGGRAPH_CHECKPOINT_DATABASE_URL`。角色及 schema 的基线见 `deploy/bootstrap-postgres.sql`；数据库迁移见 `backend/migrations/versions/`。首次试运行的演示数据初始化顺序参照 README 的三条 `stage06_demo.py init`、`seed_python_basics_demo.py`、`prepare_python_classroom_demo.py` 命令。不要在已有试运行数据上重复执行重置命令。
+- PostgreSQL：分别配置 `TEACHING_DATABASE_URL` 与 `LANGGRAPH_CHECKPOINT_DATABASE_URL`。角色及 schema 的基线见 `deploy/bootstrap-postgres.sql`；数据库迁移见 `backend/migrations/versions/`。云端首次试运行按 README 执行 `stage06_demo.py init` 和 `seed_python_basics_demo.py`；`prepare_python_classroom_demo.py` 只用于本机样例姓名整理。不要在已有试运行数据上重复执行重置命令。
 - Docker：后端主机必须能运行受限 Python Runner 镜像；旧 FAQ 任务还依赖 OpenHands 镜像。运行用户需要可用的 Docker CLI 和容器权限。先按 `docs/runtime-environment.md` 验证镜像与工作区。
 - 模型：在服务器本地环境设置 `LLM_API_KEY`、`LLM_MODEL`、`LLM_BASE_URL` 等变量。`backend/.env.example` 只提供字段示例，不包含密钥。要验证实时 AI 回答，必须提供有效模型密钥并实际调用模型。
 - 前端：在仓库根目录 `npm ci`，分别运行 `npm run build --workspace @teachingagent/student` 和 `npm run build --workspace @teachingagent/teacher`。构建后的 `frontend/student/dist`、`frontend/teacher/dist` 是两个静态站点；它们访问各自同源的 `/api`，因此两个站点的反向代理都要转发 `/api` 到后端。

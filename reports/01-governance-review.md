@@ -20,4 +20,4 @@
 
 ## Hooks和第三方文件
 
-没有创建 `.git/hooks` 自定义脚本、`.codex/hooks` 或 `.agents/hooks`。项目技能目录中的 Impeccable 参考文档可能提及 hooks，但没有启用任何 hooks。第三方缓存文件保持不变。
+没有创建 `.git/hooks` 自定义脚本或 `.agents/hooks`。项目技能目录中的 Impeccable 参考文档可能提及 hooks，但没有启用任何 hooks。第三方缓存文件保持不变。

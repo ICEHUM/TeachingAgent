@@ -9,7 +9,7 @@
 - 端口只绑定 `127.0.0.1`，由 Docker 随机分配。
 - 测试凭据保存在用户临时目录，不写入项目或 Git。
 
-Docker Desktop CLI 位于用户安装目录。普通 Codex 沙箱不能执行该二进制；Stage 02B 在获得宿主执行权限后固定使用本机 `dockerDesktopLinuxEngine` 命名管道。
+Docker Desktop CLI 位于用户安装目录。受限开发环境不能直接执行该二进制；Stage 02B 在获得宿主执行权限后固定使用本机 `dockerDesktopLinuxEngine` 命名管道。
 
 ## 业务与 checkpoint 边界
 

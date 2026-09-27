@@ -10,7 +10,7 @@
 
 | 检查 | 直接命令结果 | 结论 |
 |---|---|---|
-| `where docker` | 未找到命令 | 当前 Codex 进程不能按命令名解析 Docker CLI |
+| `where docker` | 未找到命令 | 当时的受限开发进程不能按命令名解析 Docker CLI |
 | `docker version` | `docker` 未识别 | 同上，并不代表 Docker Desktop 未安装 |
 | `docker context ls` | `docker` 未识别 | 同上 |
 
@@ -18,12 +18,12 @@
 
 - Docker CLI 实际位于 `C:\Users\ICEHENG\AppData\Local\Programs\DockerDesktop\resources\bin\docker.exe`。
 - Docker Desktop 的命名管道（包括 `dockerDesktopLinuxEngine`）存在。
-- 当前 Codex 沙箱拒绝直接执行用户目录中的 `docker.exe`；在获得宿主执行权限后，使用绝对路径完成了只读核验。
+- 当时的受限开发环境拒绝直接执行用户目录中的 `docker.exe`；在获得宿主执行权限后，使用绝对路径完成了只读核验。
 - Client：Docker 29.8.0，Windows/amd64。
 - Server：Docker Desktop 4.91.0，Engine 29.8.0，Linux/amd64。
 - Context：`desktop-linux` 指向 `npipe:////./pipe/dockerDesktopLinuxEngine`，并为当前上下文。
 
-这与阶段00实测记录一致。阶段02A“没有可用 Docker CLI”的表述应收窄为：当时的 Codex 沙箱不能按命令名调用宿主 Docker CLI；宿主 Docker Linux Engine 本身可用。
+这与阶段00实测记录一致。阶段02A“没有可用 Docker CLI”的表述应收窄为：当时的受限开发环境不能按命令名调用宿主 Docker CLI；宿主 Docker Linux Engine 本身可用。
 
 ## 固定 PostgreSQL 镜像建议
 
