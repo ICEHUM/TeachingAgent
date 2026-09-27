@@ -2,15 +2,15 @@
 import contextlib
 import io
 import json
-from pathlib import Path
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
-from app.agent.llm import ModelSettings, build_llm
 import httpx
+from app.agent.llm import ModelSettings, build_llm
 
 
 def main():
@@ -64,7 +64,7 @@ def main():
             report["status"] = "passed"
             print("API tool-call schema: passed (no actual tool executed)", flush=True)
         return 0
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - report unexpected external API failures
         message = str(error)
         if secret:
             message = message.replace(secret, "[REDACTED]")
@@ -79,7 +79,9 @@ def main():
         print(json.dumps(report, ensure_ascii=False), flush=True)
         return 1
     finally:
-        (ROOT / "docs" / "model-api-check.json").write_text(
+        report_path = ROOT / ".runtime" / "checks" / "model-api-check.json"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(
             json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 

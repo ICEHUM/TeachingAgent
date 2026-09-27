@@ -456,7 +456,6 @@ async def _workbench_view(
             evaluator = evaluator_by_operation.get(tool_operation_id, "")
             executor_label = (
                 "Python Runner 运行证据" if evaluator.startswith("docker_runner:") else
-                "OpenHands 实训证据" if evaluator.startswith("openhands:") else
                 "隔离运行证据"
             )
             trace.extend([

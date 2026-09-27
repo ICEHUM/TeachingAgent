@@ -2,17 +2,17 @@
 import argparse
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-REPORT = ROOT / "docs" / "runtime-check.json"
+REPORT = ROOT / ".runtime" / "checks" / "runtime-check.json"
 
 
 def run(args, timeout=30):
-    result = subprocess.run(args, capture_output=True, timeout=timeout)
+    result = subprocess.run(args, capture_output=True, timeout=timeout, check=False)
     raw = result.stdout + result.stderr
     encoding = "utf-16le" if b"\x00" in raw else "utf-8"
     return result.returncode, raw.decode(encoding, errors="replace").strip()
@@ -85,12 +85,13 @@ def main():
             print("Container smoke check passed.", flush=True)
         report["status"] = "ready"
         return 0
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - persist unexpected runtime failures
         report["status"] = "failed"
         report["error"] = str(exc)
         print(str(exc), file=sys.stderr)
         return 1
     finally:
+        REPORT.parent.mkdir(parents=True, exist_ok=True)
         REPORT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("Runtime report: " + str(REPORT), flush=True)
 

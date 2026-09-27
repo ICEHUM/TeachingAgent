@@ -1,7 +1,0 @@
-{
-  "checked_at": "2026-09-22T13:20:26+0800",
-  "status": "failed",
-  "container_smoke": "not_run",
-  "docker_cli": "Docker version 29.8.0, build 88096ef",
-  "error": "[WinError 5] 拒绝访问。"
-}

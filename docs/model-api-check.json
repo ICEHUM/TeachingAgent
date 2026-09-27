@@ -1,9 +1,0 @@
-{
-  "checked_at": "2026-09-20T08:28:44.341833+00:00",
-  "status": "passed",
-  "model": "deepseek-flash",
-  "base_url": "https://api.deepseek.com",
-  "model_available": true,
-  "openhands_text_completion": "passed",
-  "api_tool_call": "passed"
-}

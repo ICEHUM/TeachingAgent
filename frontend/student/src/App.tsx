@@ -450,7 +450,7 @@ export function App() {
     } catch (error) {
       const apiError = error instanceof ApiError ? error : null;
       setRunState(apiError?.code === "timeout" ? "timeout" : "failed");
-      setRunMessage(apiError?.code === "openhands_unavailable" ? "OpenHands 暂不可用，本次不计入学生错误。" : apiError?.message || "运行失败，请检查连接后重试。");
+      setRunMessage(apiError?.code === "openhands_unavailable" ? "运行环境暂不可用，本次不计入学生错误。" : apiError?.message || "运行失败，请检查连接后重试。");
       await load();
     } finally { actionLock.current = false; }
   }

@@ -1,16 +1,16 @@
 """Verify two container workspaces without sending model credentials or calling an LLM."""
-from contextlib import ExitStack
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import sys
+from contextlib import ExitStack
+from datetime import datetime, timezone
+from pathlib import Path
 
 os.environ.setdefault("OPENHANDS_SUPPRESS_BANNER", "1")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
-from app.agent.workspace import isolated_workspace, docker_command
 import httpx
+from app.agent.workspace import docker_command, isolated_workspace
 
 
 def main():
@@ -66,12 +66,14 @@ def main():
         report["status"] = "passed"
         print("Both test containers removed; workspace evidence files retained.", flush=True)
         return 0
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - persist unexpected runtime failures
         report.update(status="failed", error=str(error))
         print(str(error), file=sys.stderr)
         return 1
     finally:
-        (ROOT / "docs/workspace-check.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        report_path = ROOT / ".runtime" / "checks" / "workspace-check.json"
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
